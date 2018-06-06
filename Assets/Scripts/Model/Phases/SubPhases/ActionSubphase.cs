@@ -10,6 +10,8 @@ namespace SubPhases
 
         public override void Start()
         {
+            base.Start();
+
             Name = "Action SubPhase";
             RequiredPilotSkill = PreviousSubPhase.RequiredPilotSkill;
             RequiredPlayer = PreviousSubPhase.RequiredPlayer;
@@ -46,38 +48,23 @@ namespace SubPhases
 
         private void StartActionDecisionSubphase(object sender, System.EventArgs e)
         {
-            Phases.StartTemporarySubPhase(
+            Phases.StartTemporarySubPhaseOld(
                 "Action Decision",
                 typeof(ActionDecisonSubPhase),
-                EndActionDecisionSubhase
+                delegate { Actions.FinishAction(Finish); }
             );
         }
 
-        private void EndActionDecisionSubhase()
+        private void Finish()
         {
-            Selection.ThisShip.CallOnActionDecisionSubphaseEnd();
-
-            Triggers.ResolveTriggers(
-                TriggerTypes.OnActionDecisionSubPhaseEnd,
-                delegate {
-                    Phases.FinishSubPhase(typeof(ActionDecisonSubPhase));
-                    Triggers.FinishTrigger();
-                });
+            UI.HideSkipButton();
+            Phases.FinishSubPhase(typeof(ActionDecisonSubPhase));
+            Triggers.FinishTrigger();
         }
 
         public override void Next()
         {
             FinishPhase();
-        }
-
-        public override void Pause()
-        {
-            
-        }
-
-        public override void Resume()
-        {
-            
         }
 
         public override void FinishPhase()
@@ -91,7 +78,7 @@ namespace SubPhases
             Phases.CurrentSubPhase.Next();
         }
 
-        public override bool ThisShipCanBeSelected(Ship.GenericShip ship)
+        public override bool ThisShipCanBeSelected(Ship.GenericShip ship, int mouseKeyIsPressed)
         {
             bool result = false;
             Messages.ShowErrorToHuman("Ship cannot be selected: Perform action first");
@@ -107,51 +94,55 @@ namespace SubPhases
 
     public class ActionDecisonSubPhase : DecisionSubPhase
     {
+        public bool ActionWasPerformed { get; private set; }
 
-        public override void Prepare()
+        public override void PrepareDecision(System.Action callBack)
         {
-            infoText = "Select action";
+            InfoText = "Select action";
+            ShowSkipButton = true;
+            DefaultDecisionName = "Focus";
+
             List<ActionsList.GenericAction> availableActions = Selection.ThisShip.GetAvailableActionsList();
 
             if (availableActions.Count > 0)
             {
-                Roster.GetPlayer(Phases.CurrentPhasePlayer).PerformAction();
+                GenerateActionButtons();
+                callBack();
             }
             else
             {
                 Messages.ShowErrorToHuman("Cannot perform any actions");
+                Actions.CurrentAction = null;
                 CallBack();
             }
         }
 
-        public void ShowActionDecisionPanel()
+        public void GenerateActionButtons()
         {
+            //TODO: Use more global way of fix
+            HideDecisionWindowUI();
+
             List<ActionsList.GenericAction> availableActions = Selection.ThisShip.GetAvailableActionsList();
             foreach (var action in availableActions)
             {
-                AddDecision(action.Name, delegate {
-                    var ship = Selection.ThisShip;
-                    Tooltips.EndTooltip();
-                    UI.HideSkipButton();
-                    ship.AddAlreadyExecutedAction(action);
-                    ship.CallActionIsTaken(action);
-                    action.ActionTake();
-                });
-                AddTooltip(action.Name, action.ImageUrl);
+                string decisionName = (action.LinkedRedAction == null) ? action.Name : action.Name + " > <color=red>" + action.LinkedRedAction.Name + "</color>";
+                AddDecision(decisionName, delegate {
+                    ActionWasPerformed = true;
+                    Actions.TakeAction(action);
+                }, action.ImageUrl, -1, action.IsRed);
             }
         }
 
         public override void Resume()
         {
             base.Resume();
-            Initialize();
 
             UI.ShowSkipButton();
         }
 
         public override void SkipButton()
         {
-            UI.HideSkipButton();
+            Actions.CurrentAction = null;
             CallBack();
         }
 
@@ -164,51 +155,61 @@ namespace SubPhases
 
     public class FreeActionDecisonSubPhase : DecisionSubPhase
     {
+        public bool ActionWasPerformed { get; private set; }
 
-        public override void Prepare()
+        public override void PrepareDecision(System.Action callBack)
         {
-            infoText = "Select free action";
+            InfoText = "Select free action";
+            DefaultDecisionName = "Focus";
+
             List<ActionsList.GenericAction> availableActions = Selection.ThisShip.GetAvailableFreeActionsList();
 
             if (availableActions.Count > 0)
             {
-                Roster.GetPlayer(Phases.CurrentPhasePlayer).PerformFreeAction();
+                GenerateFreeActionButtons();
+                callBack();
             }
             else
             {
                 Messages.ShowErrorToHuman("Cannot perform any actions");
+                Actions.CurrentAction = null;
                 CallBack();
             }
         }
 
-        public void ShowActionDecisionPanel()
+        public void GenerateFreeActionButtons()
 		{
 			Selection.ThisShip.IsFreeActionSkipped = false;
             List<ActionsList.GenericAction> availableActions = Selection.ThisShip.GetAvailableFreeActionsList();
             foreach (var action in availableActions)
             {
-                AddDecision(action.Name, delegate {
-                    var ship = Selection.ThisShip;
-                    Tooltips.EndTooltip();
-                    UI.HideSkipButton();
-                    ship.AddAlreadyExecutedAction(action);
-                    ship.CallActionIsTaken(action);
-                    action.ActionTake();
-                });
-                AddTooltip(action.Name, action.ImageUrl);
+                string decisionName = (action.LinkedRedAction == null) ? action.Name : action.Name + " > <color=red>" + action.LinkedRedAction.Name + "</color>";
+                AddDecision(
+                    decisionName,
+                    delegate
+                    {
+                        ActionWasPerformed = true;
+                        Selection.ThisShip.CallBeforeFreeActionIsPerformed(action, delegate { Actions.TakeAction(action); });
+                    },
+                    action.ImageUrl,
+                    -1,
+                    action.IsRed
+                );
             }
         }
 
         public override void Resume()
         {
             base.Resume();
-            Initialize();
+
+            if (ShowSkipButton) UI.ShowSkipButton(); else UI.HideSkipButton();
         }
 
         public override void SkipButton()
         {
             UI.HideSkipButton();
-			Selection.ThisShip.IsFreeActionSkipped = true;
+            Actions.CurrentAction = null;
+            Selection.ThisShip.IsFreeActionSkipped = true;
             CallBack();
         }
 

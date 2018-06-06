@@ -1,6 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Ship;
+using System;
+using BoardTools;
 
 namespace Ship
 {
@@ -11,7 +14,6 @@ namespace Ship
             public HortonSalm() : base()
             {
                 PilotName = "Horton Salm";
-                ImageUrl = "https://vignette4.wikia.nocookie.net/xwing-miniatures/images/5/56/Horton_Salm.png";
                 PilotSkill = 8;
                 Cost = 25;
 
@@ -19,66 +21,75 @@ namespace Ship
 
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Astromech);
 
+                faction = Faction.Rebel;
+
                 SkinName = "Gray";
 
-                faction = Faction.Rebels;
-            }
-
-            public override void InitializePilot()
-            {
-                base.InitializePilot();
-                AfterGenerateAvailableActionEffectsList += HortonSalmPilotAbility;
-            }
-
-            public void HortonSalmPilotAbility(GenericShip ship)
-            {
-                ship.AddAvailableActionEffect(new PilotAbilities.HortonSalmAction());
+                PilotAbilities.Add(new Abilities.HortonSalmAbility());
             }
         }
     }
 }
 
-namespace PilotAbilities
+namespace Abilities
 {
-    public class HortonSalmAction : ActionsList.GenericAction
+    public class HortonSalmAbility : GenericAbility
     {
-        public HortonSalmAction()
+        public override void ActivateAbility()
         {
-            Name = EffectName = "Horton Salm's ability";
-            IsReroll = true;
+            HostShip.AfterGenerateAvailableActionEffectsList += HortonSalmPilotAbility;
         }
 
-        public override void ActionEffect(System.Action callBack)
+        public override void DeactivateAbility()
         {
-            DiceRerollManager diceRerollManager = new DiceRerollManager
-            {
-                SidesCanBeRerolled = new List<DieSide> { DieSide.Blank },
-                CallBack = callBack
-            };
-            diceRerollManager.Start();
+            HostShip.AfterGenerateAvailableActionEffectsList -= HortonSalmPilotAbility;
         }
 
-        public override bool IsActionEffectAvailable()
+        public void HortonSalmPilotAbility(GenericShip ship)
         {
-            bool result = false;
-            Board.ShipShotDistanceInformation shotInfo = new Board.ShipShotDistanceInformation(Combat.Attacker, Combat.Defender, Combat.ChosenWeapon);
-            if ((Combat.AttackStep == CombatStep.Attack) && (shotInfo.Range > 1))
-            {
-                result = true;
-            }
-            return result;
+            ship.AddAvailableActionEffect(new HortonSalmAction());
         }
 
-        public override int GetActionEffectPriority()
+        private class HortonSalmAction : ActionsList.GenericAction
         {
-            int result = 0;
-
-            if (Combat.AttackStep == CombatStep.Attack)
+            public HortonSalmAction()
             {
-                if (Combat.DiceRollAttack.Blanks > 0) result = 95;
+                Name = EffectName = "Horton Salm's ability";
+                IsReroll = true;
             }
 
-            return result;
+            public override void ActionEffect(System.Action callBack)
+            {
+                DiceRerollManager diceRerollManager = new DiceRerollManager
+                {
+                    SidesCanBeRerolled = new List<DieSide> { DieSide.Blank },
+                    CallBack = callBack
+                };
+                diceRerollManager.Start();
+            }
+
+            public override bool IsActionEffectAvailable()
+            {
+                bool result = false;
+                ShotInfo shotInfo = new ShotInfo(Combat.Attacker, Combat.Defender, Combat.ChosenWeapon);
+                if ((Combat.AttackStep == CombatStep.Attack) && (shotInfo.Range > 1))
+                {
+                    result = true;
+                }
+                return result;
+            }
+
+            public override int GetActionEffectPriority()
+            {
+                int result = 0;
+
+                if (Combat.AttackStep == CombatStep.Attack)
+                {
+                    if (Combat.DiceRollAttack.Blanks > 0) result = 95;
+                }
+
+                return result;
+            }
         }
 
     }

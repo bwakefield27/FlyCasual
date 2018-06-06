@@ -1,5 +1,6 @@
 ﻿using Ship;
 using Upgrade;
+using Abilities;
 
 namespace UpgradesList
 {
@@ -7,28 +8,34 @@ namespace UpgradesList
     {
         public SensorJammer() : base()
         {
-            Type = UpgradeType.System;
+            Types.Add(UpgradeType.System);
             Name = "Sensor Jammer";
             Cost = 4;
+
+            UpgradeAbilities.Add(new SensorJammerAbility());
+        }        
+    }
+}
+
+namespace Abilities
+{
+    public class SensorJammerAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.AfterGenerateAvailableOppositeActionEffectsList += SensorJammerActionEffect;
         }
 
-        public override bool IsAllowedForShip(GenericShip ship)
+        public override void DeactivateAbility()
         {
-            return ship.ShipBaseSize == BaseSize.Large;
-        }
-
-        public override void AttachToShip(GenericShip host)
-        {
-            base.AttachToShip(host);
-
-            host.AfterGenerateAvailableOppositeActionEffectsList += SensorJammerActionEffect;
+            HostShip.AfterGenerateAvailableOppositeActionEffectsList -= SensorJammerActionEffect;
         }
 
         private void SensorJammerActionEffect(GenericShip host)
         {
             ActionsList.GenericAction newAction = new ActionsList.SensorJammerActionEffect()
             {
-                ImageUrl = ImageUrl,
+                ImageUrl = HostUpgrade.ImageUrl,
                 Host = host
             };
             host.AddAvailableOppositeActionEffect(newAction);
@@ -44,7 +51,7 @@ namespace ActionsList
         public SensorJammerActionEffect()
         {
             Name = EffectName = "Sensor Jammer";
-            IsOpposite = true;
+            DiceModificationTiming = DiceModificationTimingType.Opposite;
         }
         
         public override int GetActionEffectPriority()

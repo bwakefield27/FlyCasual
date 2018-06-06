@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿using Ship;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,66 +13,76 @@ namespace Ship
             public DarkCurse() : base()
             {
                 PilotName = "\"Dark Curse\"";
-                ImageUrl = "https://vignette1.wikia.nocookie.net/xwing-miniatures/images/4/49/Dark_Curse.png";
-                IsUnique = true;
                 PilotSkill = 6;
                 Cost = 16;
-            }
 
-            public override void InitializePilot()
+                IsUnique = true;
+
+                PilotAbilities.Add(new Abilities.DarkCurseAbility());
+            }
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class DarkCurseAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.OnAttackStartAsDefender += AddDarkCursePilotAbility;
+            HostShip.OnDefenceStartAsDefender += RemoveDarkCursePilotAbility;
+        }
+
+        public override void DeactivateAbility()
+        {
+            HostShip.OnAttackStartAsDefender -= AddDarkCursePilotAbility;
+            HostShip.OnDefenceStartAsDefender -= RemoveDarkCursePilotAbility;
+        }
+
+        private void AddDarkCursePilotAbility()
+        {
+            if (Combat.AttackStep == CombatStep.Attack)
             {
-                base.InitializePilot();
-                OnAttack += AddDarkCursePilotAbility;
-                OnDefence += RemoveDarkCursePilotAbility;
+                Combat.Attacker.OnTryAddAvailableActionEffect += UseDarkCurseRestriction;
+                Combat.Attacker.Tokens.AssignCondition(new Conditions.DarkCurseCondition(Combat.Attacker));
             }
+        }
 
-            public void AddDarkCursePilotAbility()
+        private void UseDarkCurseRestriction(GenericShip ship, ActionsList.GenericAction action, ref bool canBeUsed)
+        {
+            if (action.TokensSpend.Contains(typeof(Tokens.FocusToken)))
             {
-                if ((Combat.AttackStep == CombatStep.Attack) && (Combat.Defender.PilotName == PilotName))
-                {
-                    Combat.Attacker.OnTryAddAvailableActionEffect += UseDarkCurseRestriction;
-                    Combat.Attacker.AssignToken(new Conditions.DarkCurseCondition(), delegate { });
-                }
+                Messages.ShowErrorToHuman("Dark Curse: Cannot spend focus");
+                canBeUsed = false;
             }
-
-            private void UseDarkCurseRestriction(ActionsList.GenericAction action, ref bool canBeUsed)
+            if (action.IsReroll)
             {
-                if (action.IsSpendFocus)
-                {
-                    Messages.ShowErrorToHuman("Dark Curse: Cannot spend focus");
-                    canBeUsed = false;
-                }
-                if (action.IsReroll)
-                {
-                    Messages.ShowErrorToHuman("Dark Curse: Cannot reroll");
-                    canBeUsed = false;
-                }
+                Messages.ShowErrorToHuman("Dark Curse: Cannot reroll");
+                canBeUsed = false;
             }
+        }
 
-            public void RemoveDarkCursePilotAbility()
+        private void RemoveDarkCursePilotAbility()
+        {
+            if ((Combat.AttackStep == CombatStep.Defence) && (Combat.Defender.ShipId == HostShip.ShipId))
             {
-                if ((Combat.AttackStep == CombatStep.Defence) && (Combat.Defender.PilotName == PilotName))
-                {
-                    Combat.Attacker.OnTryAddAvailableActionEffect -= UseDarkCurseRestriction;
-                    Combat.Attacker.RemoveToken(typeof(Conditions.DarkCurseCondition));
-                }
+                Combat.Attacker.OnTryAddAvailableActionEffect -= UseDarkCurseRestriction;
+                Combat.Attacker.Tokens.RemoveCondition(typeof(Conditions.DarkCurseCondition));
             }
-
         }
     }
 }
 
 namespace Conditions
 {
-
     public class DarkCurseCondition : Tokens.GenericToken
     {
-        public DarkCurseCondition()
+        public DarkCurseCondition(GenericShip host) : base(host)
         {
             Name = "Debuff Token";
             Temporary = false;
             Tooltip = new Ship.TIEFighter.DarkCurse().ImageUrl;
         }
     }
-
 }

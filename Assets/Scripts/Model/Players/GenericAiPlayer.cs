@@ -3,6 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using Ship;
+using ActionsList;
+using BoardTools;
+using SubPhases;
 
 namespace Players
 {
@@ -10,38 +14,56 @@ namespace Players
     public partial class GenericAiPlayer : GenericPlayer
     {
 
-        public GenericAiPlayer() : base() {
+        public GenericAiPlayer() : base()
+        {
             Type = PlayerType.Ai;
             Name = "AI";
+
+            NickName = "A.I.";
+            Title = "Protocol Droid";
+            Avatar = "UpgradesList.C3PO";
         }
 
         public override void SetupShip()
         {
+            base.SetupShip();
+
             foreach (var shipHolder in Ships)
             {
-                if (shipHolder.Value.PilotSkill == Phases.CurrentSubPhase.RequiredPilotSkill)
+                if (!shipHolder.Value.IsSetupPerformed && shipHolder.Value.PilotSkill == Phases.CurrentSubPhase.RequiredPilotSkill)
                 {
-                    int direction = (Phases.CurrentSubPhase.RequiredPlayer == PlayerNo.Player1) ? -1 : 1;
-                    shipHolder.Value.SetPosition(shipHolder.Value.GetPosition() + new Vector3(0, 0, direction * 1.2f));
+                    Selection.ChangeActiveShip(shipHolder.Value);
 
-                    shipHolder.Value.IsSetupPerformed = true;
+                    int direction = (Phases.CurrentSubPhase.RequiredPlayer == PlayerNo.Player1) ? -1 : 1;
+                    Vector3 position = shipHolder.Value.GetPosition() - direction * new Vector3(0, 0, Board.BoardIntoWorld(Board.DISTANCE_1 + Board.RANGE_1));
+
+                    GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
+                    Game.Wait(0.5f, delegate { Board.PlaceShip(shipHolder.Value, position, shipHolder.Value.GetAngles(), Phases.Next); });
+                    return;
                 }
             }
+
             Phases.Next();
         }
 
         public override void AssignManeuver()
         {
+            base.AssignManeuver();
+
             foreach (var shipHolder in Ships)
             {
+                if (RulesList.IonizationRule.IsIonized(shipHolder.Value)) continue;
+
                 Selection.ChangeActiveShip("ShipId:" + shipHolder.Value.ShipId);
-                shipHolder.Value.SetAssignedManeuver(new Movement.StraightMovement(2, Movement.ManeuverDirection.Forward, Movement.ManeuverBearing.Straight, Movement.ManeuverColor.White));
+                shipHolder.Value.SetAssignedManeuver(new Movement.StraightMovement(2, Movement.ManeuverDirection.Forward, Movement.ManeuverBearing.Straight, Movement.MovementComplexity.Normal));
             }
             Phases.Next();
         }
 
         public override void PerformManeuver()
         {
+            base.PerformManeuver();
+
             bool foundToActivate = false;
             foreach (var shipHolder in Roster.GetPlayer(Phases.CurrentPhasePlayer).Ships)
             {
@@ -63,29 +85,31 @@ namespace Players
             }
         }
 
-        public virtual void ActivateShip(Ship.GenericShip ship)
+        public virtual void ActivateShip(GenericShip ship)
         {
             Selection.ChangeActiveShip("ShipId:" + ship.ShipId);
             PerformManeuverOfShip(ship);
         }
 
-        protected void PerformManeuverOfShip(Ship.GenericShip ship)
+        protected void PerformManeuverOfShip(GenericShip ship)
         {
-            Selection.ChangeActiveShip("ShipId:" + ship.ShipId);
-
-            GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
-            Game.Movement.PerformStoredManeuver();
+            ShipMovementScript.ActivateAndMove(ship.ShipId);
         }
 
         //TODOL Don't skip attack of all PS ships if one cannot attack (Biggs interaction)
 
         public override void PerformAttack()
         {
-            if (DebugManager.DebugAI) Debug.Log("AI wants to attack!");
+            base.PerformAttack();
 
-            SelectShipThatCanAttack();
+            Console.Write("AI is going to perform attack", LogTypes.AI);
 
-            Ship.GenericShip targetForAttack = null;
+            SelectShipThatCanAttack(SelectTargetForAttack);
+        }
+
+        private void SelectTargetForAttack()
+        {
+            GenericShip targetForAttack = null;
 
             // TODO: Fix bug with missing chosen weapon
 
@@ -93,41 +117,59 @@ namespace Players
             {
                 if (!DebugManager.DebugNoCombat)
                 {
-                    Dictionary<Ship.GenericShip, float> enemyShips = GetEnemyShipsAndDistance(Selection.ThisShip, ignoreCollided: true, inArcAndRange: true);
+                    Dictionary<GenericShip, float> enemyShips = GetEnemyShipsAndDistance(Selection.ThisShip, ignoreCollided: true, inArcAndRange: true);
 
                     targetForAttack = GetTargetWithAssignedTargetLock(enemyShips);
 
-                    if (DebugManager.DebugAI) Debug.Log("AI has target for attack by target lock? " + targetForAttack);
+                    if (targetForAttack != null)
+                    {
+                        Console.Write("Ship has Target Lock on " + targetForAttack.PilotName + "(" + targetForAttack.ShipId + ")", LogTypes.AI);
+                    }
+                    else
+                    {
+                        Console.Write("Ship doesn't have Target Lock on enemy", LogTypes.AI);
+                    }
 
                     if (targetForAttack == null)
                     {
                         targetForAttack = SelectNearestTarget(enemyShips);
+                        if (targetForAttack != null)
+                        {
+                            Console.Write("Ship selected nearest target " + targetForAttack.PilotName + "(" + targetForAttack.ShipId + ")", LogTypes.AI);
+                        }
+                        else
+                        {
+                            Console.Write("Ship cannot find valid enemy for attack", LogTypes.AI);
+                        }
                     }
 
                 }
+
+                Selection.ThisShip.CallAfterAttackWindow();
                 Selection.ThisShip.IsAttackPerformed = true;
             }
 
             if (targetForAttack != null)
             {
-                if (DebugManager.DebugAI) Debug.Log("AI launches attack!");
+                Console.Write("Ship attacks target\n", LogTypes.AI, true, "yellow");
+
+                Selection.TryToChangeAnotherShip("ShipId:" + targetForAttack.ShipId);
                 Combat.TryPerformAttack();
             }
             else
             {
-                if (DebugManager.DebugAI) Debug.Log("AI didn't performed attack and goes NEXT");
-                Phases.Next();
+                Console.Write("Attack is skipped\n", LogTypes.AI, true, "yellow");
+                OnTargetNotLegalForAttack();
             }
-
         }
 
-        private Ship.GenericShip SelectNearestTarget(Dictionary<Ship.GenericShip, float> enemyShips)
+        private GenericShip SelectNearestTarget(Dictionary<GenericShip, float> enemyShips)
         {
-            Ship.GenericShip targetForAttack = null;
+            GenericShip targetForAttack = null;
 
             foreach (var shipHolder in enemyShips)
             {
-                Ship.GenericShip newTarget = null;
+                GenericShip newTarget = null;
                 newTarget = TryToDeclareTarget(shipHolder.Key, shipHolder.Value);
 
                 if (newTarget != null)
@@ -145,9 +187,9 @@ namespace Players
             return targetForAttack;
         }
 
-        private Ship.GenericShip GetTargetWithAssignedTargetLock(Dictionary<Ship.GenericShip, float> enemyShips)
+        private GenericShip GetTargetWithAssignedTargetLock(Dictionary<GenericShip, float> enemyShips)
         {
-            Ship.GenericShip targetForAttack = null;
+            GenericShip targetForAttack = null;
 
             foreach (var shipHolder in enemyShips)
             {
@@ -160,7 +202,7 @@ namespace Players
             return targetForAttack;
         }
 
-        private static void SelectShipThatCanAttack()
+        private static void SelectShipThatCanAttack(Action callback)
         {
             foreach (var shipHolder in Roster.GetPlayer(Phases.CurrentPhasePlayer).Ships)
             {
@@ -169,26 +211,42 @@ namespace Players
                     if (!shipHolder.Value.IsAttackPerformed)
                     {
                         Selection.ChangeActiveShip("ShipId:" + shipHolder.Value.ShipId);
+                        Console.Write(Selection.ThisShip.PilotName + "(" + Selection.ThisShip.ShipId + ") is selected as attacker", LogTypes.AI);
                         break;
                     }
                 }
             }
+
+            if (Selection.ThisShip != null)
+            {
+                Selection.ThisShip.CallCombatActivation(callback);
+            }
+            else
+            {
+                callback();
+            }
         }
 
-        private Ship.GenericShip TryToDeclareTarget(Ship.GenericShip targetShip, float distance)
+        private GenericShip TryToDeclareTarget(GenericShip targetShip, float distance)
         {
-            Ship.GenericShip selectedTargetShip = targetShip;
+            GenericShip selectedTargetShip = targetShip;
 
             if (DebugManager.DebugAI) Debug.Log("AI checks target for attack: " + targetShip);
+
+            if (targetShip.IsReadyToBeDestroyed)
+            {
+                if (DebugManager.DebugAI) Debug.Log("But this target is already destroyed");
+                return null;
+            }
 
             if (DebugManager.DebugAI) Debug.Log("Ship is selected before validation: " + selectedTargetShip);
             Selection.TryToChangeAnotherShip("ShipId:" + selectedTargetShip.ShipId);
 
-            Ship.IShipWeapon chosenWeapon = null;
+            IShipWeapon chosenWeapon = null;
 
-            foreach (var upgrade in Selection.ThisShip.UpgradeBar.GetInstalledUpgrades())
+            foreach (var upgrade in Selection.ThisShip.UpgradeBar.GetUpgradesOnlyFaceup())
             {
-                Ship.IShipWeapon secondaryWeapon = (upgrade as Ship.IShipWeapon);
+                IShipWeapon secondaryWeapon = (upgrade as IShipWeapon);
                 if (secondaryWeapon != null)
                 {
                     if (secondaryWeapon.IsShotAvailable(targetShip))
@@ -201,8 +259,9 @@ namespace Players
 
             chosenWeapon = chosenWeapon ?? Selection.ThisShip.PrimaryWeapon;
             Combat.ChosenWeapon = chosenWeapon;
+            Combat.ShotInfo = new BoardTools.ShotInfo(Selection.ThisShip, Selection.AnotherShip, Combat.ChosenWeapon);
 
-            if (Rules.TargetIsLegalForShot.IsLegal() && Combat.ChosenWeapon.IsShotAvailable(Selection.AnotherShip))
+            if (Rules.TargetIsLegalForShot.IsLegal(true) && Combat.ChosenWeapon.IsShotAvailable(Selection.AnotherShip))
             {
                 if (DebugManager.DebugAI) Debug.Log("AI target legal: " + Selection.AnotherShip);
             }
@@ -217,10 +276,10 @@ namespace Players
             return selectedTargetShip;
         }
 
-        public Ship.GenericShip FindNearestEnemyShip(Ship.GenericShip thisShip, bool ignoreCollided = false, bool inArcAndRange = false)
+        public GenericShip FindNearestEnemyShip(GenericShip thisShip, bool ignoreCollided = false, bool inArcAndRange = false)
         {
-            Dictionary<Ship.GenericShip, float> results = GetEnemyShipsAndDistance(thisShip, ignoreCollided, inArcAndRange);
-            Ship.GenericShip result = null;
+            Dictionary<GenericShip, float> results = GetEnemyShipsAndDistance(thisShip, ignoreCollided, inArcAndRange);
+            GenericShip result = null;
             if (results.Count != 0)
             {
                 result = results.OrderBy(n => n.Value).First().Key;
@@ -228,9 +287,9 @@ namespace Players
             return result;
         }
 
-        public Dictionary<Ship.GenericShip, float> GetEnemyShipsAndDistance(Ship.GenericShip thisShip, bool ignoreCollided = false, bool inArcAndRange = false)
+        public Dictionary<GenericShip, float> GetEnemyShipsAndDistance(GenericShip thisShip, bool ignoreCollided = false, bool inArcAndRange = false)
         {
-            Dictionary<Ship.GenericShip, float> results = new Dictionary<Ship.GenericShip, float>();
+            Dictionary<GenericShip, float> results = new Dictionary<GenericShip, float>();
 
             foreach (var shipHolder in Roster.GetPlayer(Roster.AnotherPlayer(thisShip.Owner.PlayerNo)).Ships)
             {
@@ -257,7 +316,7 @@ namespace Players
 
                     if (inArcAndRange)
                     {
-                        Board.ShipDistanceInformation distanceInfo = new Board.ShipDistanceInformation(thisShip, shipHolder.Value);
+                        BoardTools.DistanceInfo distanceInfo = new BoardTools.DistanceInfo(thisShip, shipHolder.Value);
                         if ((distanceInfo.Range > 3))
                         {
                             continue;
@@ -275,16 +334,19 @@ namespace Players
 
         public override void UseOwnDiceModifications()
         {
+            base.UseOwnDiceModifications();
+
             Selection.ActiveShip = (Combat.AttackStep == CombatStep.Attack) ? Combat.Attacker : Combat.Defender;
 
             Selection.ActiveShip.GenerateAvailableActionEffectsList();
-            List<ActionsList.GenericAction> availableActionEffectsList = Selection.ActiveShip.GetAvailableActionEffectsList();
+            List<GenericAction> availableActionEffectsList = Selection.ActiveShip.GetAvailableActionEffectsList();
 
-            Dictionary<ActionsList.GenericAction, int> actionsPriority = new Dictionary<ActionsList.GenericAction, int>();
+            Dictionary<GenericAction, int> actionsPriority = new Dictionary<GenericAction, int>();
 
             foreach (var actionEffect in availableActionEffectsList)
             {
                 int priority = actionEffect.GetActionEffectPriority();
+                Selection.ActiveShip.CallOnAiGetDiceModificationPriority(actionEffect, ref priority);
                 actionsPriority.Add(actionEffect, priority);
             }
 
@@ -294,7 +356,7 @@ namespace Players
 
             if (actionsPriority.Count > 0)
             {
-                KeyValuePair<ActionsList.GenericAction, int> prioritizedActionEffect = actionsPriority.First();
+                KeyValuePair<GenericAction, int> prioritizedActionEffect = actionsPriority.First();
                 if (prioritizedActionEffect.Value > 0)
                 {
                     isActionEffectTaken = true;
@@ -316,10 +378,12 @@ namespace Players
 
         public override void UseOppositeDiceModifications()
         {
-            Selection.ActiveShip.GenerateAvailableOppositeActionEffectsList();
-            List<ActionsList.GenericAction> availableOppositeActionEffectsList = Selection.ActiveShip.GetAvailableOppositeActionEffectsList();
+            base.UseOppositeDiceModifications();
 
-            Dictionary<ActionsList.GenericAction, int> oppositeActionsPriority = new Dictionary<ActionsList.GenericAction, int>();
+            Selection.ActiveShip.GenerateAvailableOppositeActionEffectsList();
+            List<GenericAction> availableOppositeActionEffectsList = Selection.ActiveShip.GetAvailableOppositeActionEffectsList();
+
+            Dictionary<GenericAction, int> oppositeActionsPriority = new Dictionary<GenericAction, int>();
 
             foreach (var oppositeActionEffect in availableOppositeActionEffectsList)
             {
@@ -333,7 +397,7 @@ namespace Players
 
             if (oppositeActionsPriority.Count > 0)
             {
-                KeyValuePair<ActionsList.GenericAction, int> prioritizedOppositeActionEffect = oppositeActionsPriority.First();
+                KeyValuePair<GenericAction, int> prioritizedOppositeActionEffect = oppositeActionsPriority.First();
                 if (prioritizedOppositeActionEffect.Value > 0)
                 {
                     isActionEffectTaken = true;
@@ -353,11 +417,108 @@ namespace Players
             }
         }
 
-        public override void TakeDecision()
+        public override void UseCompareResultsDiceModifications()
         {
-            Phases.CurrentSubPhase.DoDefault();
+            base.UseCompareResultsDiceModifications();
+
+            Combat.ToggleConfirmDiceResultsButton(false);
+
+            Selection.ActiveShip = Combat.Attacker;
+
+            Selection.ActiveShip.GenerateAvailableCompareResultsEffectsList();
+            List<GenericAction> availableCompareResultsEffectsList = Selection.ActiveShip.GetAvailableCompareResultsEffectsList();
+
+            Dictionary<GenericAction, int> actionsPriority = new Dictionary<GenericAction, int>();
+
+            foreach (var actionEffect in availableCompareResultsEffectsList)
+            {
+                int priority = actionEffect.GetActionEffectPriority();
+                actionsPriority.Add(actionEffect, priority);
+            }
+
+            actionsPriority = actionsPriority.OrderByDescending(n => n.Value).ToDictionary(n => n.Key, n => n.Value);
+
+            bool isActionEffectTaken = false;
+
+            if (actionsPriority.Count > 0)
+            {
+                KeyValuePair<GenericAction, int> prioritizedActionEffect = actionsPriority.First();
+                if (prioritizedActionEffect.Value > 0)
+                {
+                    isActionEffectTaken = true;
+                    Messages.ShowInfo("AI uses \"" + prioritizedActionEffect.Key.Name + "\"");
+                    GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
+                    Game.Wait(1, delegate {
+                        Selection.ActiveShip.AddAlreadyExecutedCompareResultsEffect(prioritizedActionEffect.Key);
+                        prioritizedActionEffect.Key.ActionEffect(UseCompareResultsDiceModifications);
+                    });
+                }
+            }
+
+            if (!isActionEffectTaken)
+            {
+                Combat.CompareResultsAndDealDamage();
+            }
         }
 
+        public override void ConfirmDiceCheck()
+        {
+            (Phases.CurrentSubPhase as DiceRollCheckSubPhase).Confirm();
+        }
+
+        public override void OnTargetNotLegalForAttack()
+        {
+            Selection.ThisShip.CallAfterAttackWindow();
+            Selection.ThisShip.IsAttackPerformed = true;
+
+            Selection.ThisShip.CallCombatDeactivation(
+                delegate { Phases.FinishSubPhase(typeof(CombatSubPhase)); }
+            );
+        }
+
+        public override void ChangeManeuver(Action<string> callback, Func<string, bool> filter = null)
+        {
+            callback(Selection.ThisShip.AssignedManeuver.ToString());
+        }
+
+        public override void SelectManeuver(Action<string> callback, Func<string, bool> filter = null)
+        {
+            callback(Selection.ThisShip.AssignedManeuver.ToString());
+        }
+
+        public override void StartExtraAttack()
+        {
+            // TODO: Handle extra attack targets
+
+            UI.SkipButtonEffect();
+        }
+
+        public override void SelectShipForAbility()
+        {
+            (Phases.CurrentSubPhase as SelectShipSubPhase).AiSelectPrioritizedTarget();
+        }
+
+        public override void RerollManagerIsPrepared()
+        {
+            DiceRerollManager.CurrentDiceRerollManager.ConfirmRerollButtonIsPressed();
+        }
+
+        public override void PlaceObstacle()
+        {
+            base.PlaceObstacle();
+
+            GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
+            Game.Wait(1, delegate {
+                (Phases.CurrentSubPhase as ObstaclesPlacementSubPhase).PlaceRandom();
+                Messages.ShowInfo("AI: Obstacle was placed");
+            });
+        }
+
+        public override void PerformSystemsActivation()
+        {
+            base.PerformSystemsActivation();
+            UI.SkipButtonEffect();
+        }
     }
 
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SubPhases;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,8 +10,6 @@ namespace Players
 
     public partial class HotacAiPlayer : GenericAiPlayer
     {
-        private bool inDebug = false;
-
         public HotacAiPlayer() : base()
         {
             Name = "HotAC AI";
@@ -18,23 +17,27 @@ namespace Players
 
         public override void ActivateShip(Ship.GenericShip ship)
         {
-            if (inDebug) Debug.Log("=== " + ship.PilotName + " (" + ship.ShipId + ") ===");
+            Console.Write(ship.PilotName + " (" + ship.ShipId + ") is activated to perform maneuver", LogTypes.AI);
 
             bool isTargetLockPerformed = false;
 
             Ship.GenericShip anotherShip = FindNearestEnemyShip(ship, ignoreCollided: true, inArcAndRange: true);
             if (anotherShip == null) anotherShip = FindNearestEnemyShip(ship, ignoreCollided: true);
             if (anotherShip == null) anotherShip = FindNearestEnemyShip(ship);
-            if (inDebug) Debug.Log("Nearest enemy is " + anotherShip.PilotName + " (" + anotherShip.ShipId + ")");
+            Console.Write("Nearest enemy is " + ship.PilotName + " (" + ship.ShipId + ")", LogTypes.AI);
 
             // TODO: remove null variant
-            if (anotherShip != null)
+
+            if (!RulesList.IonizationRule.IsIonized(ship))
             {
-                ship.SetAssignedManeuver(ship.HotacManeuverTable.GetManeuver(ship, anotherShip));
-            }
-            else
-            {
-                ship.SetAssignedManeuver(new Movement.StraightMovement(2, Movement.ManeuverDirection.Forward, Movement.ManeuverBearing.Straight, Movement.ManeuverColor.White));
+                if (anotherShip != null)
+                {
+                    ship.SetAssignedManeuver(ship.HotacManeuverTable.GetManeuver(ship, anotherShip));
+                }
+                else
+                {
+                    ship.SetAssignedManeuver(new Movement.StraightMovement(2, Movement.ManeuverDirection.Forward, Movement.ManeuverBearing.Straight, Movement.MovementComplexity.Normal));
+                }
             }
 
             ship.GenerateAvailableActionsList();
@@ -43,7 +46,7 @@ namespace Players
                 if (action.GetType() == typeof(ActionsList.TargetLockAction))
                 {
                     isTargetLockPerformed = true;
-                    Actions.AssignTargetLockToPair(
+                    Actions.AcquireTargetLock(
                         ship,
                         anotherShip,
                         delegate { PerformManeuverOfShip(ship); },
@@ -57,26 +60,32 @@ namespace Players
             {
                 PerformManeuverOfShip(ship);
             }
-            
         }
 
-        public override void PerformAction()
+        public override void TakeDecision()
         {
-            PerformActionFromList(Selection.ThisShip.GetAvailableActionsList());
-        }
-
-        public override void PerformFreeAction()
-        {
-            PerformActionFromList(Selection.ThisShip.GetAvailableFreeActionsList());
+            if (Phases.CurrentSubPhase is ActionDecisonSubPhase)
+            {
+                PerformActionFromList(Selection.ThisShip.GetAvailableActionsList());
+            }
+            else if (Phases.CurrentSubPhase is FreeActionDecisonSubPhase)
+            {
+                PerformActionFromList(Selection.ThisShip.GetAvailableFreeActionsList());
+            }
+            else (Phases.CurrentSubPhase as DecisionSubPhase).DoDefault();
         }
 
         private void PerformActionFromList(List<ActionsList.GenericAction> actionsList)
         {
             bool isActionTaken = false;
 
-            if (Selection.ThisShip.GetToken(typeof(Tokens.StressToken)) != null)
+            if (Selection.ThisShip.Tokens.GetToken(typeof(Tokens.StressToken)) != null)
             {
-                Selection.ThisShip.RemoveToken(typeof(Tokens.StressToken));
+                isActionTaken = true;
+                Selection.ThisShip.Tokens.RemoveToken(
+                    typeof(Tokens.StressToken),
+                    Phases.CurrentSubPhase.CallBack
+                );
             }
             else
             {
@@ -109,25 +118,37 @@ namespace Players
 
         public override void AfterShipMovementPrediction()
         {
-            bool leaveMovementAsIs = true;
-
-            if (Selection.ThisShip.AssignedManeuver.movementPrediction.IsOffTheBoard)
+            if (Selection.ThisShip.AssignedManeuver.IsRevealDial)
             {
-                leaveMovementAsIs = false;
-                if (DebugManager.DebugAI) Debug.Log("AI predicts off the board maneuver!");
-                AvoidOffTheBoard();
+                bool leaveMovementAsIs = true;
+
+                if (Selection.ThisShip.AssignedManeuver.movementPrediction.IsOffTheBoard)
+                {
+                    leaveMovementAsIs = false;
+                    Console.Write("Ship predicts off the board maneuver!", LogTypes.AI);
+                    AvoidOffTheBoard();
+                }
+                else
+                {
+                    if (Selection.ThisShip.AssignedManeuver.movementPrediction.AsteroidsHit.Count != 0)
+                    {
+                        leaveMovementAsIs = false;
+                        Console.Write("Ship predicts collision with asteroid!", LogTypes.AI);
+                        Swerve();
+                    }
+                }
+
+                if (leaveMovementAsIs)
+                {
+                    Console.Write("Ship executes selected maneuver\n", LogTypes.AI, true);
+                    Selection.ThisShip.AssignedManeuver.LaunchShipMovement();
+                }
             }
             else
             {
-                if (Selection.ThisShip.AssignedManeuver.movementPrediction.AsteroidsHit.Count != 0)
-                {
-                    leaveMovementAsIs = false;
-                    if (DebugManager.DebugAI) Debug.Log("AI predicts asteroid hit!");
-                    Swerve();
-                }
+                Console.Write("Ship is ionized and doesn't select maneuver\n", LogTypes.AI, true);
+                Selection.ThisShip.AssignedManeuver.LaunchShipMovement();
             }
-
-            if (leaveMovementAsIs) Selection.ThisShip.AssignedManeuver.LaunchShipMovement();
         }
 
         private void Swerve()

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Movement;
+using ActionsList;
 
 namespace Ship
 {
@@ -13,6 +14,7 @@ namespace Ship
             public JumpMaster5000() : base()
             {
                 Type = "JumpMaster 5000";
+                IconicPilots.Add(Faction.Scum, typeof(Dengar));
                 ShipBaseSize = BaseSize.Large;
                 ShipBaseArcsType = Arcs.BaseArcsType.Arc360;
 
@@ -24,14 +26,14 @@ namespace Ship
                 MaxShields = 4;
 
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Elite);
-                PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Torpedo);
-                PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Torpedo);
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Crew);
-                PrintedUpgradeIcons.Add(Upgrade.UpgradeType.SalvagedAstromech);
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Illicit);
 
+                PrintedActions.Add(new TargetLockAction());
+                PrintedActions.Add(new BarrelRollAction());
+
                 AssignTemporaryManeuvers();
-                HotacManeuverTable = new AI.YT2400Table();
+                HotacManeuverTable = new AI.Jumpmaster5000Table();
 
                 factions.Add(Faction.Scum);
                 faction = Faction.Scum;
@@ -45,35 +47,27 @@ namespace Ship
                 {
                     SoundFlyPaths.Add("Falcon-Fly" + i);
                 }
-
-            }
-
-            public override void InitializeShip()
-            {
-                base.InitializeShip();
-                BuiltInActions.Add(new ActionsList.TargetLockAction());
-                BuiltInActions.Add(new ActionsList.BarrelRollAction());
             }
 
             private void AssignTemporaryManeuvers()
             {
-                Maneuvers.Add("1.L.T", ManeuverColor.Green);
-                Maneuvers.Add("1.L.B", ManeuverColor.Green);
-                Maneuvers.Add("1.F.S", ManeuverColor.Green);
-                Maneuvers.Add("1.R.B", ManeuverColor.White);
-                Maneuvers.Add("1.R.T", ManeuverColor.White);
-                Maneuvers.Add("2.L.T", ManeuverColor.Green);
-                Maneuvers.Add("2.L.B", ManeuverColor.Green);
-                Maneuvers.Add("2.F.S", ManeuverColor.Green);
-                Maneuvers.Add("2.R.B", ManeuverColor.White);
-                Maneuvers.Add("2.R.T", ManeuverColor.White);
-                Maneuvers.Add("2.L.R", ManeuverColor.White);
-                Maneuvers.Add("2.R.R", ManeuverColor.Red);
-                Maneuvers.Add("3.L.B", ManeuverColor.White);
-                Maneuvers.Add("3.F.S", ManeuverColor.White);
-                Maneuvers.Add("3.R.B", ManeuverColor.White);
-                Maneuvers.Add("4.F.S", ManeuverColor.White);
-                Maneuvers.Add("4.F.R", ManeuverColor.Red);
+                Maneuvers.Add("1.L.T", MovementComplexity.Easy);
+                Maneuvers.Add("1.L.B", MovementComplexity.Easy);
+                Maneuvers.Add("1.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("1.R.B", MovementComplexity.Normal);
+                Maneuvers.Add("1.R.T", MovementComplexity.Normal);
+                Maneuvers.Add("2.L.T", MovementComplexity.Easy);
+                Maneuvers.Add("2.L.B", MovementComplexity.Easy);
+                Maneuvers.Add("2.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("2.R.B", MovementComplexity.Normal);
+                Maneuvers.Add("2.R.T", MovementComplexity.Normal);
+                Maneuvers.Add("2.L.R", MovementComplexity.Normal);
+                Maneuvers.Add("2.R.R", MovementComplexity.Complex);
+                Maneuvers.Add("3.L.B", MovementComplexity.Normal);
+                Maneuvers.Add("3.F.S", MovementComplexity.Normal);
+                Maneuvers.Add("3.R.B", MovementComplexity.Normal);
+                Maneuvers.Add("4.F.S", MovementComplexity.Normal);
+                Maneuvers.Add("4.F.R", MovementComplexity.Complex);
             }
 
         }

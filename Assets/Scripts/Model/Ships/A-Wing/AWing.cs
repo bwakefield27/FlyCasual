@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Movement;
+using ActionsList;
 
 namespace Ship
 {
@@ -14,7 +15,9 @@ namespace Ship
             {
                 Type = "A-Wing";
 
-                ManeuversImageUrl = "https://vignette1.wikia.nocookie.net/xwing-miniatures/images/3/3d/MR_T65-X-WING.png";
+                IconicPilots.Add(Faction.Rebel, typeof(TychoCelchu));
+
+                ManeuversImageUrl = "https://vignette.wikia.nocookie.net/xwing-miniatures/images/0/0c/MR_A-WING.png";
 
                 Firepower = 2;
                 Agility = 3;
@@ -23,11 +26,15 @@ namespace Ship
 
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Missile);
 
+                PrintedActions.Add(new TargetLockAction());
+                PrintedActions.Add(new EvadeAction());
+                PrintedActions.Add(new BoostAction());
+
                 AssignTemporaryManeuvers();
                 HotacManeuverTable = new AI.AWingTable();
 
-                factions.Add(Faction.Rebels);
-                faction = Faction.Rebels;
+                factions.Add(Faction.Rebel);
+                faction = Faction.Rebel;
 
                 SkinName = "Red";
 
@@ -38,41 +45,32 @@ namespace Ship
                 {
                     SoundFlyPaths.Add("XWing-Fly" + i);
                 }
-                
-            }
-
-            public override void InitializeShip()
-            {
-                base.InitializeShip();
-                BuiltInActions.Add(new ActionsList.TargetLockAction());
-                BuiltInActions.Add(new ActionsList.EvadeAction());
-                BuiltInActions.Add(new ActionsList.BoostAction());
             }
 
             private void AssignTemporaryManeuvers()
             {
-                Maneuvers.Add("1.L.T", ManeuverColor.White);
-                Maneuvers.Add("1.L.B", ManeuverColor.None);
-                Maneuvers.Add("1.F.S", ManeuverColor.None);
-                Maneuvers.Add("1.R.B", ManeuverColor.None);
-                Maneuvers.Add("1.R.T", ManeuverColor.White);
-                Maneuvers.Add("1.F.R", ManeuverColor.None);
-                Maneuvers.Add("2.L.T", ManeuverColor.Green);
-                Maneuvers.Add("2.L.B", ManeuverColor.Green);
-                Maneuvers.Add("2.F.S", ManeuverColor.Green);
-                Maneuvers.Add("2.R.B", ManeuverColor.Green);
-                Maneuvers.Add("2.R.T", ManeuverColor.Green);
-                Maneuvers.Add("2.F.R", ManeuverColor.None);
-                Maneuvers.Add("3.L.T", ManeuverColor.White);
-                Maneuvers.Add("3.L.B", ManeuverColor.White);
-                Maneuvers.Add("3.F.S", ManeuverColor.Green);
-                Maneuvers.Add("3.R.B", ManeuverColor.White);
-                Maneuvers.Add("3.R.T", ManeuverColor.White);
-                Maneuvers.Add("3.F.R", ManeuverColor.Red);
-                Maneuvers.Add("4.F.S", ManeuverColor.Green);
-                Maneuvers.Add("4.F.R", ManeuverColor.None);
-                Maneuvers.Add("5.F.S", ManeuverColor.Green);
-                Maneuvers.Add("5.F.R", ManeuverColor.Red);
+                Maneuvers.Add("1.L.T", MovementComplexity.Normal);
+                Maneuvers.Add("1.L.B", MovementComplexity.None);
+                Maneuvers.Add("1.F.S", MovementComplexity.None);
+                Maneuvers.Add("1.R.B", MovementComplexity.None);
+                Maneuvers.Add("1.R.T", MovementComplexity.Normal);
+                Maneuvers.Add("1.F.R", MovementComplexity.None);
+                Maneuvers.Add("2.L.T", MovementComplexity.Easy);
+                Maneuvers.Add("2.L.B", MovementComplexity.Easy);
+                Maneuvers.Add("2.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("2.R.B", MovementComplexity.Easy);
+                Maneuvers.Add("2.R.T", MovementComplexity.Easy);
+                Maneuvers.Add("2.F.R", MovementComplexity.None);
+                Maneuvers.Add("3.L.T", MovementComplexity.Normal);
+                Maneuvers.Add("3.L.B", MovementComplexity.Normal);
+                Maneuvers.Add("3.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("3.R.B", MovementComplexity.Normal);
+                Maneuvers.Add("3.R.T", MovementComplexity.Normal);
+                Maneuvers.Add("3.F.R", MovementComplexity.Complex);
+                Maneuvers.Add("4.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("4.F.R", MovementComplexity.None);
+                Maneuvers.Add("5.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("5.F.R", MovementComplexity.Complex);
             }
 
         }

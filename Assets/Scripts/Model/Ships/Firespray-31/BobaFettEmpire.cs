@@ -1,6 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Ship;
+using GameModes;
 
 namespace Ship
 {
@@ -11,56 +13,64 @@ namespace Ship
             public BobaFettEmpire() : base()
             {
                 PilotName = "Boba Fett";
-                ImageUrl = "https://raw.githubusercontent.com/guidokessels/xwing-data/master/images/pilots/Galactic%20Empire/Firespray-31/boba-fett.png";
                 PilotSkill = 8;
                 Cost = 39;
 
-                SkinName = "Boba Fett";
+                IsUnique = true;
 
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Elite);
 
-                faction = Faction.Empire;
-            }
+                faction = Faction.Imperial;
 
-            public override void InitializePilot()
+                SkinName = "Boba Fett";
+
+                PilotAbilities.Add(new Abilities.BobaFettEmpireAbility());
+            }
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class BobaFettEmpireAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.OnManeuverIsRevealed += RegisterAskChangeManeuver;
+        }
+
+        public override void DeactivateAbility()
+        {
+            HostShip.OnManeuverIsRevealed -= RegisterAskChangeManeuver;
+        }
+
+
+        private void RegisterAskChangeManeuver(GenericShip ship)
+        {
+            RegisterAbilityTrigger(TriggerTypes.OnManeuverIsRevealed, AskChangeManeuver);
+        }
+
+        private void AskChangeManeuver(object sender, System.EventArgs e)
+        {
+            if (HostShip.AssignedManeuver.Bearing == Movement.ManeuverBearing.Bank)
             {
-                base.InitializePilot();
-
-                OnManeuverIsRevealed += RegisterAskChangeManeuver;
+                HostShip.Owner.ChangeManeuver(GameMode.CurrentGameMode.AssignManeuver, IsBankManeuversSameSpeed);
             }
-
-            private void RegisterAskChangeManeuver(GenericShip ship)
+            else
             {
-                Triggers.RegisterTrigger(new Trigger() {
-                    Name = "Boba Fett's ability",
-                    TriggerType = TriggerTypes.OnManeuverIsRevealed,
-                    TriggerOwner = ship.Owner.PlayerNo,
-                    EventHandler = AskChangeManeuver
-                });
+                Triggers.FinishTrigger();
             }
+        }
 
-            private void AskChangeManeuver(object sender, System.EventArgs e)
+        private bool IsBankManeuversSameSpeed(string maneuverString)
+        {
+            bool result = false;
+            Movement.MovementStruct movementStruct = new Movement.MovementStruct(maneuverString);
+            if (movementStruct.Bearing == Movement.ManeuverBearing.Bank && movementStruct.Speed == HostShip.AssignedManeuver.ManeuverSpeed)
             {
-                if (Selection.ThisShip.AssignedManeuver.Bearing == Movement.ManeuverBearing.Bank)
-                {
-                    DirectionsMenu.Show(IsBankManeuversSameSpeed);
-                }
-                else
-                {
-                    Triggers.FinishTrigger();
-                }                
+                result = true;
             }
-
-            private bool IsBankManeuversSameSpeed(string maneuverString)
-            {
-                bool result = false;
-                Movement.MovementStruct movementStruct = new Movement.MovementStruct(maneuverString);
-                if (movementStruct.Bearing == Movement.ManeuverBearing.Bank && movementStruct.Speed == Selection.ThisShip.AssignedManeuver.ManeuverSpeed)
-                {
-                    result = true;
-                }
-                return result;
-            }
+            return result;
         }
     }
 }

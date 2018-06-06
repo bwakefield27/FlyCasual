@@ -1,6 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Ship;
+using System;
 
 namespace Ship
 {
@@ -11,39 +13,54 @@ namespace Ship
             public NightBeast() : base()
             {
                 PilotName = "\"Night Beast\"";
-                ImageUrl = "https://vignette2.wikia.nocookie.net/xwing-miniatures/images/b/ba/Night_Beast.png";
-                IsUnique = true;
                 PilotSkill = 5;
                 Cost = 15;
-            }
 
-            public override void InitializePilot()
+                IsUnique = true;
+
+                PilotAbilities.Add(new Abilities.NightBeastAbility());
+            }
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class NightBeastAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.OnMovementFinish += NightBeastPilotAbility;
+        }
+
+        public override void DeactivateAbility()
+        {
+            HostShip.OnMovementFinish -= NightBeastPilotAbility;
+        }
+
+        private void NightBeastPilotAbility(GenericShip ship)
+        {
+            if (BoardTools.Board.IsOffTheBoard(ship)) return;
+
+            if (HostShip.AssignedManeuver.ColorComplexity == Movement.MovementComplexity.Easy)
             {
-                base.InitializePilot();
-                OnMovementFinish += NightBeastPilotAbility;
+                Triggers.RegisterTrigger(
+                    new Trigger()
+                    {
+                        Name = "Night Beast: Free Focus action",
+                        TriggerOwner = ship.Owner.PlayerNo,
+                        TriggerType = TriggerTypes.OnShipMovementFinish,
+                        EventHandler = PerformFreeFocusAction
+                    }
+                );
             }
+        }
 
-            private void NightBeastPilotAbility(GenericShip ship)
-            {
-                if (AssignedManeuver.ColorComplexity == Movement.ManeuverColor.Green)
-                {
-                    Triggers.RegisterTrigger(
-                        new Trigger() {
-                            Name = "Night Beast: Free Focus action",
-                            TriggerOwner = ship.Owner.PlayerNo,
-                            TriggerType = TriggerTypes.OnShipMovementFinish,
-                            EventHandler = PerformFreeFocusAction
-                        }
-                    );
-                }
-            }
+        private void PerformFreeFocusAction(object sender, System.EventArgs e)
+        {
+            List<ActionsList.GenericAction> actions = new List<ActionsList.GenericAction>() { new ActionsList.FocusAction() };
 
-            private void PerformFreeFocusAction(object sender, System.EventArgs e)
-            {
-                List<ActionsList.GenericAction> actions = new List<ActionsList.GenericAction>() { new ActionsList.FocusAction() };
-
-                AskPerformFreeAction(actions, Triggers.FinishTrigger);
-            }
+            HostShip.AskPerformFreeAction(actions, Triggers.FinishTrigger);
         }
     }
 }

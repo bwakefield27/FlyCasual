@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GameModes;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -6,7 +7,7 @@ using UnityEngine.UI;
 
 public partial class DiceRerollManager
 {
-    public static DiceRerollManager currentDiceRerollManager;
+    public static DiceRerollManager CurrentDiceRerollManager;
 
     public List<DieSide> SidesCanBeRerolled;
     public int NumberOfDiceCanBeRerolled;
@@ -16,7 +17,7 @@ public partial class DiceRerollManager
 
     public DiceRerollManager()
     {
-        currentDiceRerollManager = this;
+        CurrentDiceRerollManager = this;
     }
 
     public void Start()
@@ -26,13 +27,13 @@ public partial class DiceRerollManager
         SwitchToDiceRerollsPanel();
         DoDefaultSelection();
         GenerateSelectionButtons();
-        SetConfirmButtonAction();
+        StartPlayerInteraction();
     }
 
     private void OrganizeDiceView()
     {
-        Combat.CurentDiceRoll.OrganizeDicePositions();
-        Combat.CurentDiceRoll.ToggleRerolledLocks(true);
+        Combat.CurrentDiceRoll.OrganizeDicePositions();
+        Combat.CurrentDiceRoll.ToggleRerolledLocks(true);
     }
 
     private void CheckParameters()
@@ -93,7 +94,7 @@ public partial class DiceRerollManager
             }
         }
 
-        Combat.CurentDiceRoll.SelectBySides(dieSides, NumberOfDiceCanBeRerolled);
+        Combat.CurrentDiceRoll.SelectBySides(dieSides, NumberOfDiceCanBeRerolled);
     }
 
     private void DoDefaultSelectionOppositeDice()
@@ -119,7 +120,7 @@ public partial class DiceRerollManager
             }
         }
 
-        Combat.CurentDiceRoll.SelectBySides(dieSides, NumberOfDiceCanBeRerolled);
+        Combat.CurrentDiceRoll.SelectBySides(dieSides, NumberOfDiceCanBeRerolled);
     }
 
     private void GenerateSelectionButtons()
@@ -167,44 +168,27 @@ public partial class DiceRerollManager
 
     private void SelectDiceByFilter(List<DieSide> dieSides, int number)
     {
-        Combat.CurentDiceRoll.SelectBySides(dieSides, number);
+        Combat.CurrentDiceRoll.SelectBySides(dieSides, number);
     }
 
-    private void SetConfirmButtonAction()
+    private void StartPlayerInteraction()
     {
-        if (Selection.ActiveShip.Owner.GetType() == typeof(Players.HumanPlayer))
-        {
-            Button closeButton = GameObject.Find("UI/CombatDiceResultsPanel").transform.Find("DiceRerollsPanel/Confirm").GetComponent<Button>();
-            closeButton.onClick.RemoveAllListeners();
-            closeButton.onClick.AddListener(ConfirmReroll);
-            closeButton.gameObject.SetActive(true);
-        }
-        else
-        {
-            ConfirmReroll();
-        }            
+        Selection.ActiveShip.Owner.RerollManagerIsPrepared();
+    }
+
+    public void ShowConfirmButton()
+    {
+        Button closeButton = GameObject.Find("UI/CombatDiceResultsPanel").transform.Find("DiceRerollsPanel/Confirm").GetComponent<Button>();
+        closeButton.onClick.RemoveAllListeners();
+        closeButton.onClick.AddListener(ConfirmRerollButtonIsPressed);
+        closeButton.gameObject.SetActive(true);
     }
 
     private void ToggleDiceModificationsPanel(bool isActive)
     {
         GameObject.Find("UI/CombatDiceResultsPanel").transform.Find("DiceModificationsPanel").gameObject.SetActive(isActive);
 
-        if (isActive)
-        {
-            Combat.ToggleConfirmDiceResultsButton(true);
-            if (!IsOpposite)
-            {
-                Combat.ShowDiceModificationButtons();
-            }
-            else
-            {
-                Combat.ShowOppositeDiceModificationButtons();
-            }
-        }
-        else
-        {
-            Combat.HideDiceModificationButtons();
-        }
+        if (!isActive) Combat.HideDiceModificationButtons();
     }
 
     private void ToggleDiceRerollsPanel(bool isActive)
@@ -223,10 +207,37 @@ public partial class DiceRerollManager
         }
     }
 
+    public void ConfirmRerollButtonIsPressed()
+    {
+        GameMode.CurrentGameMode.StartDiceRerollExecution();
+    }
+
     public void ConfirmReroll()
     {
+        Selection.ThisShip.CallRerollIsConfirmed(RerollSelected);
+    }
+
+    private void RerollSelected()
+    {
         if (Selection.ActiveShip.Owner.GetType() == typeof(Players.HumanPlayer)) BlockButtons();
-        Combat.CurentDiceRoll.RerollSelected(UnblockButtons);
+        Combat.CurrentDiceRoll.RerollSelected(ImmediatelyAfterReRolling);
+    }
+
+    private void ImmediatelyAfterReRolling(DiceRoll diceroll)
+    {
+        Selection.ActiveShip.CallOnImmediatelyAfterReRolling(diceroll, delegate { TryUnblockButtons(diceroll); });
+    }
+
+    public List<Die> GetDiceReadyForReroll()
+    {
+        List<Die> diceReadyForReroll = new List<Die>();
+
+        foreach (var die in Combat.CurrentDiceRoll.DiceList)
+        {
+            if (die.IsSelected) diceReadyForReroll.Add(die);
+        }
+
+        return diceReadyForReroll;
     }
 
     private void BlockButtons()
@@ -234,11 +245,23 @@ public partial class DiceRerollManager
         ToggleDiceRerollsPanel(false);
     }
 
-    private void UnblockButtons(DiceRoll diceRoll)
+    private void TryUnblockButtons(DiceRoll diceRoll)
     {
-        DiceRerollManager.currentDiceRerollManager = null;
+        if (!Network.IsNetworkGame)
+        {
+            UnblockButtons();
+        }
+        else
+        {
+            Network.SyncDiceRerollResults();
+        }
+    }
 
-        Combat.CurentDiceRoll.ToggleRerolledLocks(false);
+    public void UnblockButtons()
+    {
+        DiceRerollManager.CurrentDiceRerollManager = null;
+
+        Combat.CurrentDiceRoll.ToggleRerolledLocks(false);
         if (Selection.ActiveShip.Owner.GetType() == typeof(Players.HumanPlayer)) ToggleDiceModificationsPanel(true);
 
         if (CallBack!=null) CallBack();

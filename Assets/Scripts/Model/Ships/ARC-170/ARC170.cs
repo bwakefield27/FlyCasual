@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Movement;
+using ActionsList;
 
 namespace Ship
 {
@@ -13,6 +14,7 @@ namespace Ship
             public ARC170() : base()
             {
                 Type = "ARC-170";
+                IconicPilots.Add(Faction.Rebel, typeof(NorraWexley));
 
                 ShipBaseArcsType = Arcs.BaseArcsType.ArcRear;
 
@@ -27,11 +29,13 @@ namespace Ship
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Crew);
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Astromech);
 
-                AssignTemporaryManeuvers();
-                HotacManeuverTable = new AI.BWingTable();
+                PrintedActions.Add(new TargetLockAction());
 
-                factions.Add(Faction.Rebels);
-                faction = Faction.Rebels;
+                AssignTemporaryManeuvers();
+                HotacManeuverTable = new AI.Arc170Table();
+
+                factions.Add(Faction.Rebel);
+                faction = Faction.Rebel;
 
                 SkinName = "ARC-170";
 
@@ -45,29 +49,23 @@ namespace Ship
                 
             }
 
-            public override void InitializeShip()
-            {
-                base.InitializeShip();
-                BuiltInActions.Add(new ActionsList.TargetLockAction());
-            }
-
             private void AssignTemporaryManeuvers()
             {
-                Maneuvers.Add("1.L.B", ManeuverColor.Green);
-                Maneuvers.Add("1.F.S", ManeuverColor.Green);
-                Maneuvers.Add("1.R.B", ManeuverColor.Green);
-                Maneuvers.Add("2.L.T", ManeuverColor.White);
-                Maneuvers.Add("2.L.B", ManeuverColor.Green);
-                Maneuvers.Add("2.F.S", ManeuverColor.Green);
-                Maneuvers.Add("2.R.B", ManeuverColor.Green);
-                Maneuvers.Add("2.R.T", ManeuverColor.White);
-                Maneuvers.Add("3.L.T", ManeuverColor.Red);
-                Maneuvers.Add("3.L.B", ManeuverColor.White);
-                Maneuvers.Add("3.F.S", ManeuverColor.White);
-                Maneuvers.Add("3.R.B", ManeuverColor.White);
-                Maneuvers.Add("3.R.T", ManeuverColor.Red);
-                Maneuvers.Add("4.F.S", ManeuverColor.Red);
-                Maneuvers.Add("4.F.R", ManeuverColor.Red);
+                Maneuvers.Add("1.L.B", MovementComplexity.Easy);
+                Maneuvers.Add("1.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("1.R.B", MovementComplexity.Easy);
+                Maneuvers.Add("2.L.T", MovementComplexity.Normal);
+                Maneuvers.Add("2.L.B", MovementComplexity.Easy);
+                Maneuvers.Add("2.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("2.R.B", MovementComplexity.Easy);
+                Maneuvers.Add("2.R.T", MovementComplexity.Normal);
+                Maneuvers.Add("3.L.T", MovementComplexity.Complex);
+                Maneuvers.Add("3.L.B", MovementComplexity.Normal);
+                Maneuvers.Add("3.F.S", MovementComplexity.Normal);
+                Maneuvers.Add("3.R.B", MovementComplexity.Normal);
+                Maneuvers.Add("3.R.T", MovementComplexity.Complex);
+                Maneuvers.Add("4.F.S", MovementComplexity.Complex);
+                Maneuvers.Add("4.F.R", MovementComplexity.Complex);
             }
 
         }

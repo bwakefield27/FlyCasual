@@ -4,47 +4,62 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Upgrade;
+using Abilities;
+using Ship;
 
 namespace UpgradesList
 {
-	public class AssaultMissiles : GenericSecondaryWeapon
-	{
-		public AssaultMissiles () : base()
-		{
-			Type = UpgradeType.Missile;
+    public class AssaultMissiles : GenericSecondaryWeapon
+    {
+        public AssaultMissiles() : base()
+        {
+            Types.Add(UpgradeType.Missile);
 
-			Name = "Assault Missiles";
+            Name = "Assault Missiles";
 
-			Cost = 5;
-			MinRange = 2;
-			MaxRange = 3;
-			AttackValue = 4;
+            Cost = 5;
+            MinRange = 2;
+            MaxRange = 3;
+            AttackValue = 4;
 
-			RequiresTargetLockOnTargetToShoot = true;
-			SpendsTargetLockOnTargetToShoot = true;
-			IsDiscardedForShot = true;
-		}
+            RequiresTargetLockOnTargetToShoot = true;
+            SpendsTargetLockOnTargetToShoot = true;
+            IsDiscardedForShot = true;
 
-		public override void AttachToShip(Ship.GenericShip host)
-		{
-			base.AttachToShip(host);
+            UpgradeAbilities.Add(new AssaultMissilesAbility());
+        }
+    }
+}
 
-			SubscribeOnHit();
-		}
+namespace Abilities
+{
+    public class AssaultMissilesAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.OnShotHitAsAttacker += RegisterAssaultMissleHit;
+        }
 
-		private void SubscribeOnHit()
-		{
-			Host.OnAttackHitAsAttacker += RegisterAssaultMissleHit;
-		}
+        public override void DeactivateAbility()
+        {
+            // Ability is turned off only after full attack is finished
+            HostShip.OnCombatDeactivation += DeactivateAbilityPlanned;
+        }
+
+        private void DeactivateAbilityPlanned(GenericShip ship)
+        {
+            HostShip.OnCombatDeactivation -= DeactivateAbilityPlanned;
+            HostShip.OnShotHitAsAttacker -= RegisterAssaultMissleHit;
+        }
 
 		private void RegisterAssaultMissleHit()
 		{
-			if (Combat.ChosenWeapon == this)
+			if (Combat.ChosenWeapon == HostUpgrade)
 			{
 				Triggers.RegisterTrigger(new Trigger()
 					{
-						Name = "Assault Missle Hit",
-						TriggerType = TriggerTypes.OnAttackHit,
+						Name = "Assault Missile Hit",
+						TriggerType = TriggerTypes.OnShotHit,
 						TriggerOwner = Combat.Attacker.Owner.PlayerNo,
 						EventHandler = delegate{
 							AssaultMissilesHitEffect();
@@ -56,7 +71,7 @@ namespace UpgradesList
 		private void AssaultMissilesHitEffect(){
 			var ships = Roster.AllShips.Select (x => x.Value).ToList();
 
-			foreach (Ship.GenericShip ship in ships) {
+			foreach (GenericShip ship in ships) {
 
 				// null refs?
 				if (ship.Model == null || Combat.Defender == null || Combat.Defender.Model == null) {
@@ -67,7 +82,7 @@ namespace UpgradesList
 				if (ship.Model == Combat.Defender.Model)
 					continue;
 
-				Board.ShipDistanceInformation shotInfo = new Board.ShipDistanceInformation(Combat.Defender, ship);
+				BoardTools.DistanceInfo shotInfo = new BoardTools.DistanceInfo(Combat.Defender, ship);
 
 				if (shotInfo.Range == 1) {
 
@@ -79,15 +94,15 @@ namespace UpgradesList
 					ship.AssignedDamageDiceroll.DiceList.Add(hitDie);
 
 					Triggers.RegisterTrigger(new Trigger() {
-						Name = "Suffer Assault Missle Damage",
+						Name = "Suffer Assault Missile Damage",
 						TriggerType = TriggerTypes.OnDamageIsDealt,
 						TriggerOwner = ship.Owner.PlayerNo,
 						EventHandler = ship.SufferDamage,
                         Skippable = true,
 						EventArgs = new DamageSourceEventArgs()
 						{
-							Source = "Assault Missle",
-							DamageType = DamageTypes.ShipAttack
+							Source = "Assault Missile",
+							DamageType = DamageTypes.CardAbility
 						}
 					});
 				}

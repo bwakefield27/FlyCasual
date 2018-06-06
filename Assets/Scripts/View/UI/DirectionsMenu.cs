@@ -1,49 +1,90 @@
-﻿using System;
+﻿using Movement;
+using RuleSets;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
 public static class DirectionsMenu
 {
-    public static void Show(Func<string, bool> filter = null)
+    public static bool IsForcedToShowRedManeuvers;
+
+    public static bool IsVisible
     {
-        GameObject.Find("UI").transform.Find("ContextMenuPanel").gameObject.SetActive(false);
-        CustomizeDirectionsMenu(filter);
-        GameObject.Find("UI").transform.Find("DirectionsPanel").position = FixMenuPosition(GameObject.Find("UI").transform.Find("DirectionsPanel").gameObject, GameObject.Find("UI").transform.Find("ContextMenuPanel").position);
-        GameObject.Find("UI").transform.Find("DirectionsPanel").gameObject.SetActive(true);
+        get { return DirectionsWindow != null && DirectionsWindow.activeSelf; }
     }
 
-    private static void ClearAvailableManeuvers()
-    {
-        for (int i = 0; i < 7; i++)
-        {
-            GameObject line = GameObject.Find("UI").transform.Find("DirectionsPanel").Find("Directions").Find("Speed" + i).gameObject;
-            foreach (Transform button in line.transform)
-            {
-                button.gameObject.SetActive(false);
-            }
+    public static Action<string> Callback;
 
-            GameObject number = GameObject.Find("UI").transform.Find("DirectionsPanel").Find("Numbers").Find("Speed" + i).Find("Number").gameObject;
-            number.SetActive(false);
+    private static Func<string, bool> currentFilter;
+    private static GameObject DirectionsWindow;
+
+    public static void Show(Action<string> callback, Func<string, bool> filter = null)
+    {
+        DeleteOldDirectionsMenu();
+
+        Callback = callback;
+        currentFilter = filter;
+
+        IsForcedToShowRedManeuvers = (Input.GetKey(KeyCode.LeftControl));
+
+        GameObject prefab = (GameObject)Resources.Load("Prefabs/UI/DirectionsWindow", typeof(GameObject));
+        DirectionsWindow = MonoBehaviour.Instantiate(prefab, GameObject.Find("UI/DirectionsPanel").transform);
+
+        GameObject.Find("UI").transform.Find("ContextMenuPanel").gameObject.SetActive(false);
+        CustomizeDirectionsMenu(filter);
+        DirectionsWindow.transform.position = FixMenuPosition(
+            DirectionsWindow.transform.gameObject,
+            Input.mousePosition
+        );
+    }
+
+    public static void ShowForAll(Action<string> callback, Func<string, bool> filter = null)
+    {
+        DeleteOldDirectionsMenu();
+
+        Callback = callback;
+        currentFilter = filter;
+
+        GameObject prefab = (GameObject)Resources.Load("Prefabs/UI/DirectionsWindow", typeof(GameObject));
+        DirectionsWindow = MonoBehaviour.Instantiate(prefab, GameObject.Find("UI/DirectionsPanel").transform);
+
+        GameObject.Find("UI").transform.Find("ContextMenuPanel").gameObject.SetActive(false);
+        CustomizeDirectionsMenuAll(filter);
+        DirectionsWindow.transform.position = FixMenuPosition(
+            DirectionsWindow.transform.gameObject,
+            Input.mousePosition
+        );
+    }
+
+    private static void DeleteOldDirectionsMenu()
+    {
+        foreach (Transform transform in GameObject.Find("UI/DirectionsPanel").transform)
+        {
+            GameObject.Destroy(transform.gameObject);
         }
+    }
+
+    private static void ShowUpdated()
+    {
+        CustomizeDirectionsMenu(currentFilter);
+        DirectionsWindow.transform.position = FixMenuPosition(
+            DirectionsWindow.transform.gameObject,
+            DirectionsWindow.transform.position
+        );
     }
 
     private static void CustomizeDirectionsMenu(Func<string, bool> filter = null)
     {
-        ClearAvailableManeuvers();
-        RestoreDirectionsMenu();
-
         List<int> linesExist = new List<int>();
 
-        foreach (KeyValuePair<string, Movement.ManeuverColor> maneuverData in Selection.ThisShip.GetManeuvers())
+        foreach (KeyValuePair<string, Movement.MovementComplexity> maneuverData in Selection.ThisShip.GetManeuvers())
         {
             string[] parameters = maneuverData.Key.Split('.');
             string maneuverSpeed = parameters[0];
 
-            GameObject button = GameObject.Find("UI").transform.Find("DirectionsPanel").Find("Directions").Find("Speed" + maneuverSpeed).Find(maneuverData.Key).gameObject;
-            if (maneuverData.Value != Movement.ManeuverColor.None)
+            GameObject button = DirectionsWindow.transform.Find("Directions").Find("Speed" + maneuverSpeed).Find(maneuverData.Key).gameObject;
+            if (maneuverData.Value != Movement.MovementComplexity.None)
             {
                 if (filter == null || filter(maneuverData.Key))
                 {
@@ -51,22 +92,56 @@ public static class DirectionsMenu
 
                     SetManeuverColor(button, maneuverData);
                     button.SetActive(true);
+                    button.GetComponent<Button>().onClick.AddListener(UI.AssignManeuverButtonPressed);
 
-                    GameObject number = GameObject.Find("UI").transform.Find("DirectionsPanel").Find("Numbers").Find("Speed" + maneuverSpeed).Find("Number").gameObject;
+                    GameObject number = DirectionsWindow.transform.Find("Numbers").Find("Speed" + maneuverSpeed).Find("Number").gameObject;
                     number.SetActive(true);
                 }
             }
         }
 
-        HideExtraLines(linesExist);
-        HideExtraColumns();
+        HideExtraElements(linesExist);
     }
 
-    private static void HideExtraColumns()
+    private static void CustomizeDirectionsMenuAll(Func<string, bool> filter = null)
     {
+        List<int> linesExist = new List<int>();
+
+        foreach (string maneuverCode in Movement.GenericMovement.GetAllManeuvers())
+        {
+            string[] parameters = maneuverCode.Split('.');
+            string maneuverSpeed = parameters[0];
+
+            GameObject button = DirectionsWindow.transform.Find("Directions").Find("Speed" + maneuverSpeed).Find(maneuverCode).gameObject;
+
+            if (filter == null || filter(maneuverCode))
+            {
+                if (!linesExist.Contains(int.Parse(maneuverSpeed))) linesExist.Add(int.Parse(maneuverSpeed));
+
+                SetManeuverColor(button, new KeyValuePair<string, Movement.MovementComplexity>(maneuverCode, Movement.MovementComplexity.Normal));
+                button.SetActive(true);
+                button.GetComponent<Button>().onClick.AddListener(UI.AssignManeuverButtonPressed);
+
+                GameObject number = DirectionsWindow.transform.Find("Numbers").Find("Speed" + maneuverSpeed).Find("Number").gameObject;
+                number.SetActive(true);
+            }
+
+        }
+
+        HideExtraElements(linesExist);
+    }
+
+    private static void HideExtraElements(List<int> linesExist)
+    {
+        float freeSpace = 40;
+
+        // COLUMNS
+
         List<string> columns = new List<string>() { ".L.E", ".L.R", ".F.R", ".R.R", ".R.E" };
-        GameObject directionsPanel = GameObject.Find("UI").transform.Find("DirectionsPanel").Find("Directions").gameObject;
+        GameObject directionsPanel = DirectionsWindow.transform.Find("Directions").gameObject;
         int columnCounter = 0;
+
+        int missingColumnsCounter = 0;
 
         foreach (var column in columns)
         {
@@ -94,84 +169,59 @@ public static class DirectionsMenu
             }
             else
             {
-                directionsPanel.GetComponent<RectTransform>().sizeDelta = new Vector2(directionsPanel.GetComponent<RectTransform>().sizeDelta.x - 40, directionsPanel.GetComponent<RectTransform>().sizeDelta.y);
+                missingColumnsCounter++;
             }
         }
-    }
 
-    private static void RestoreDirectionsMenu()
-    {
-        GameObject directionsMenuPanel = GameObject.Find("UI").transform.Find("DirectionsPanel").gameObject;
-        GameObject numbersLinePanel = directionsMenuPanel.transform.Find("Numbers").gameObject;
-        GameObject directionsLinePanel = directionsMenuPanel.transform.Find("Directions").gameObject;
-        for (int i = 0; i < 7; i++)
-        {
-            numbersLinePanel.transform.Find("Speed" + i).gameObject.SetActive(true);
-            directionsLinePanel.transform.Find("Speed" + i).gameObject.SetActive(true);
-        }
-        directionsMenuPanel.GetComponent<RectTransform>().sizeDelta = new Vector3(450, 290);
-        numbersLinePanel.GetComponent<RectTransform>().sizeDelta = new Vector3(numbersLinePanel.GetComponent<RectTransform>().sizeDelta.x, 290);
-        directionsLinePanel.GetComponent<RectTransform>().sizeDelta = new Vector3(410, 290);
+        // LINES
 
-        for (int i = -1; i < 7; i++)
-        {
-            int iFixed = (i != -1) ? i : 6;
-
-            GameObject numbersPanel = numbersLinePanel.transform.Find("Speed" + iFixed).gameObject;
-            numbersPanel.transform.localPosition = new Vector2(numbersPanel.transform.localPosition.x, -200 + i * 40);
-
-            GameObject directionsPanel = directionsLinePanel.transform.Find("Speed" + iFixed).gameObject;
-            directionsPanel.transform.localPosition = new Vector2(directionsPanel.transform.localPosition.x, -205 + i * 40);
-        }
-    }
-
-    private static void HideExtraLines(List<int> linesExist)
-    {
         for (int i = -1; i < 6; i++)
         {
             if (!linesExist.Contains(i))
             {
-                HideLine(i);
+                int rowFixed = (i != -1) ? i : 6;
+
+                GameObject numbersLinePanel = DirectionsWindow.transform.Find("Numbers").gameObject;
+                numbersLinePanel.transform.Find("Speed" + rowFixed).gameObject.SetActive(false);
+
+                GameObject directionsLinePanel = DirectionsWindow.transform.Find("Directions").gameObject;
+                directionsLinePanel.transform.Find("Speed" + rowFixed).gameObject.SetActive(false);
             }
         }
-    }
 
-    private static void HideLine(int row)
-    {
-        int rowFixed = (row != -1) ? row : 6;
+        DirectionsWindow.GetComponent<RectTransform>().sizeDelta = new Vector3(DirectionsWindow.GetComponent<RectTransform>().sizeDelta.x, linesExist.Count * 40);
+        DirectionsWindow.transform.Find("Numbers").GetComponent<RectTransform>().sizeDelta = new Vector3(DirectionsWindow.transform.Find("Numbers").GetComponent<RectTransform>().sizeDelta.x, linesExist.Count * 40);
+        DirectionsWindow.transform.Find("Directions").GetComponent<RectTransform>().sizeDelta = new Vector3(DirectionsWindow.transform.Find("Directions").GetComponent<RectTransform>().sizeDelta.x - missingColumnsCounter * freeSpace, linesExist.Count * 40);
 
-        GameObject directionsMenuPanel = GameObject.Find("UI").transform.Find("DirectionsPanel").gameObject;
-        directionsMenuPanel.GetComponent<RectTransform>().sizeDelta = new Vector3(directionsMenuPanel.GetComponent<RectTransform>().sizeDelta.x, directionsMenuPanel.GetComponent<RectTransform>().sizeDelta.y - 40);
+        DirectionsWindow.GetComponent<RectTransform>().sizeDelta = new Vector2(DirectionsWindow.transform.Find("Directions").GetComponent<RectTransform>().sizeDelta.x + 70, DirectionsWindow.GetComponent<RectTransform>().sizeDelta.y);
 
-        GameObject numbersLinePanel = directionsMenuPanel.transform.Find("Numbers").gameObject;
-        numbersLinePanel.transform.Find("Speed" + rowFixed).gameObject.SetActive(false);
-        numbersLinePanel.GetComponent<RectTransform>().sizeDelta = new Vector3(numbersLinePanel.GetComponent<RectTransform>().sizeDelta.x, numbersLinePanel.GetComponent<RectTransform>().sizeDelta.y - 40);
-
-        GameObject directionsLinePanel = directionsMenuPanel.transform.Find("Directions").gameObject;
-        directionsLinePanel.transform.Find("Speed" + rowFixed).gameObject.SetActive(false);
-        directionsLinePanel.GetComponent<RectTransform>().sizeDelta = new Vector3(directionsLinePanel.GetComponent<RectTransform>().sizeDelta.x, directionsLinePanel.GetComponent<RectTransform>().sizeDelta.y - 40);
-
-        if (row > -1)
+        float offset = 5;
+        foreach (Transform transform in DirectionsWindow.transform.Find("Numbers"))
         {
-            for (int i = -1; i < rowFixed; i++)
+            if (transform.gameObject.activeSelf)
             {
-                int iFixed = (i != -1) ? i : 6;
+                transform.localPosition = new Vector2(transform.localPosition.x, offset);
+                offset -= freeSpace;
+            }
+        }
 
-                GameObject numbersPanel = numbersLinePanel.transform.Find("Speed" + iFixed).gameObject;
-                numbersPanel.transform.localPosition = new Vector2(numbersPanel.transform.localPosition.x, numbersPanel.transform.localPosition.y + 40);
-
-                GameObject directionsPanel = directionsLinePanel.transform.Find("Speed" + iFixed).gameObject;
-                directionsPanel.transform.localPosition = new Vector2(directionsPanel.transform.localPosition.x, directionsPanel.transform.localPosition.y + 40);
+        offset = 0;
+        foreach (Transform transform in DirectionsWindow.transform.Find("Directions"))
+        {
+            if (transform.gameObject.activeSelf)
+            {
+                transform.localPosition = new Vector2(transform.localPosition.x, offset);
+                offset -= freeSpace;
             }
         }
     }
 
-    private static void SetManeuverColor(GameObject button, KeyValuePair<string, Movement.ManeuverColor> maneuverData)
+    private static void SetManeuverColor(GameObject button, KeyValuePair<string, MovementComplexity> maneuverData)
     {
         Color maneuverColor = Color.yellow;
-        if (maneuverData.Value == Movement.ManeuverColor.Green) maneuverColor = Color.green;
-        if (maneuverData.Value == Movement.ManeuverColor.White) maneuverColor = Color.white;
-        if (maneuverData.Value == Movement.ManeuverColor.Red) maneuverColor = Color.red;
+        if (maneuverData.Value == MovementComplexity.Easy) maneuverColor = RuleSet.Instance.MovementEasyColor;
+        if (maneuverData.Value == MovementComplexity.Normal) maneuverColor = Color.white;
+        if (maneuverData.Value == MovementComplexity.Complex) maneuverColor = Color.red;
         button.GetComponentInChildren<Text>().color = maneuverColor;
     }
 
@@ -190,6 +240,21 @@ public static class DirectionsMenu
 
     public static void Hide()
     {
-        GameObject.Find("UI").transform.Find("DirectionsPanel").gameObject.SetActive(false);
+        GameObject.Destroy(DirectionsWindow);
+    }
+
+    public static void Update()
+    {
+        /*if (Input.GetKeyDown(KeyCode.LeftControl))
+        {
+            ForceShowRedManeuvers = true;
+            if (IsVisible && !SwarmManager.IsActive) ShowUpdated();
+        }
+
+        if (Input.GetKeyUp(KeyCode.LeftControl))
+        {
+            ForceShowRedManeuvers = false;
+            if (IsVisible && !SwarmManager.IsActive) ShowUpdated();
+        }*/
     }
 }

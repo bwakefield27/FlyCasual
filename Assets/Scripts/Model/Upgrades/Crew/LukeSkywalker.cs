@@ -1,72 +1,114 @@
 ﻿using Upgrade;
 using Ship;
 using SubPhases;
+using Abilities;
+using System;
 
 namespace UpgradesList
 {
     public class LukeSkywalker : GenericUpgrade
     {
-        private bool IsAblilityActive;
-
         public LukeSkywalker() : base()
         {
-            Type = UpgradeType.Crew;
+            Types.Add(UpgradeType.Crew);
             Name = "Luke Skywalker";
             Cost = 7;
+
             isUnique = true;
+
+            UpgradeAbilities.Add(new LukeSkywalkerCrewAbility());
         }
 
         public override bool IsAllowedForShip(GenericShip ship)
         {
-            return ship.faction == Faction.Rebels;
+            return ship.faction == Faction.Rebel;
         }
 
-        public override void AttachToShip(GenericShip host)
-        {
-            base.AttachToShip(host);
+    }
+}
 
-            host.OnAttackMissedAsAttacker += LukeSkywalkerAbility;
+namespace Abilities
+{
+    public class LukeSkywalkerCrewAbility : GenericAbility
+    {
+
+        public override void ActivateAbility()
+        {
+            HostShip.OnAttackMissedAsAttacker += CheckLukeAbility;
+            Phases.OnRoundEnd += ClearIsAbilityUsedFlag;
         }
 
-        private void LukeSkywalkerAbility()
+        public override void DeactivateAbility()
         {
-            SubscribeToCheckSecondAttack();
+            HostShip.OnAttackMissedAsAttacker -= CheckLukeAbility;
+            Phases.OnRoundEnd -= ClearIsAbilityUsedFlag;
         }
 
-        private void SubscribeToCheckSecondAttack()
+        private void CheckLukeAbility()
         {
-            if (!Host.IsCannotAttackSecondTime)
+            if (!IsAbilityUsed && !HostShip.IsCannotAttackSecondTime)
             {
-                Host.OnCheckSecondAttack += RegisterSecondAttackTrigger;
+                IsAbilityUsed = true;
+
+                // Trigger must be registered just before it's resolution
+                HostShip.OnCombatCheckExtraAttack += RegisterSecondAttackTrigger;
             }
         }
 
         private void RegisterSecondAttackTrigger(GenericShip ship)
         {
-            Host.OnCheckSecondAttack -= RegisterSecondAttackTrigger;
-            Triggers.RegisterTrigger(new Trigger
-            {
-                Name = "Luke Skywalker's ability",
-                TriggerType = TriggerTypes.OnCheckSecondAttack,
-                TriggerOwner = Host.Owner.PlayerNo,
-                EventHandler = DoSecondAttack
-            });
+            HostShip.OnCombatCheckExtraAttack -= RegisterSecondAttackTrigger;
+
+            RegisterAbilityTrigger(TriggerTypes.OnCombatCheckExtraAttack, DoSecondAttack);
         }
 
         private void DoSecondAttack(object sender, System.EventArgs e)
         {
-            Selection.ThisShip.IsCannotAttackSecondTime = true;
+            if (!HostShip.IsCannotAttackSecondTime)
+            {
+                HostShip.IsCannotAttackSecondTime = true;
 
-            Selection.ThisShip.AfterGenerateAvailableActionEffectsList += AddLukeSkywalkerCrewAbility;
-            Selection.ThisShip.AfterAttackWindow += RemoveLukeSkywalkerCrewAbility;
+                HostShip.AfterGenerateAvailableActionEffectsList += AddLukeSkywalkerCrewAbility;
+                Phases.OnCombatPhaseEnd_NoTriggers += RemoveLukeSkywalkerCrewAbility;
 
-            Phases.StartTemporarySubPhase(
-                "Second attack",
-                typeof(SelectTargetForSecondAttackSubPhase),
-                delegate {
-                    Phases.FinishSubPhase(typeof(SelectTargetForSecondAttackSubPhase));
-                    Combat.DeclareTarget();
-                });
+                Combat.StartAdditionalAttack(
+                    HostShip,
+                    FinishAdditionalAttack,
+                    IsPrimaryWeaponShot,
+                    HostUpgrade.Name,
+                    "You may perform a primary weapon attack.",
+                    HostUpgrade.ImageUrl
+                );
+            }
+            else
+            {
+                Messages.ShowErrorToHuman(string.Format("{0} cannot attack one more time", HostShip.PilotName));
+                Triggers.FinishTrigger();
+            }
+        }
+
+        private void FinishAdditionalAttack()
+        {
+            // If attack is skipped, set this flag, otherwise regular attack can be performed second time
+            HostShip.IsAttackPerformed = true;
+
+            Triggers.FinishTrigger();
+        }
+
+        private bool IsPrimaryWeaponShot(GenericShip defender, IShipWeapon weapon)
+        {
+            bool result = false;
+
+            if (Combat.ChosenWeapon is PrimaryWeaponClass)
+            {
+                result = true;
+            }
+            else
+            {
+                Messages.ShowError("Attack must be performed from primary weapon");
+            }
+
+            return result;
         }
 
         public void AddLukeSkywalkerCrewAbility(GenericShip ship)
@@ -74,10 +116,10 @@ namespace UpgradesList
             ship.AddAvailableActionEffect(new ActionsList.LukeSkywalkerCrewAction());
         }
 
-        public void RemoveLukeSkywalkerCrewAbility(GenericShip ship)
+        public void RemoveLukeSkywalkerCrewAbility()
         {
-            ship.AfterAttackWindow -= RemoveLukeSkywalkerCrewAbility;
-            ship.AfterGenerateAvailableActionEffectsList -= AddLukeSkywalkerCrewAbility;
+            Phases.OnCombatPhaseEnd_NoTriggers -= RemoveLukeSkywalkerCrewAbility;
+            HostShip.AfterGenerateAvailableActionEffectsList -= AddLukeSkywalkerCrewAbility;
         }
 
     }
@@ -97,7 +139,7 @@ namespace ActionsList
 
         public override void ActionEffect(System.Action callBack)
         {
-            Combat.CurentDiceRoll.ChangeOne(DieSide.Focus, DieSide.Crit);
+            Combat.CurrentDiceRoll.ChangeOne(DieSide.Focus, DieSide.Crit);
             callBack();
         }
 

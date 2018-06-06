@@ -2,20 +2,27 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Movement;
+using ActionsList;
+using Ship;
+using RuleSets;
 
 namespace Ship
 {
     namespace UWing
     {
-        public class UWing : GenericShip
+        public class UWing : GenericShip, IMovableWings, ISecondEditionShip
         {
+            public WingsPositions CurrentWingsPosition { get; set; }
 
             public UWing() : base()
             {
                 Type = "U-Wing";
+                IconicPilots.Add(Faction.Rebel, typeof(BlueSquadronPathfinder));
                 ShipBaseSize = BaseSize.Large;
 
                 ManeuversImageUrl = "https://vignette.wikia.nocookie.net/xwing-miniatures/images/c/c5/MR_U-WING.png";
+
+                ShipIconLetter = 'u';
 
                 Firepower = 3;
                 Agility = 1;
@@ -27,13 +34,17 @@ namespace Ship
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Crew);
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Crew);
 
-                AssignTemporaryManeuvers();
-                HotacManeuverTable = new AI.YT1300Table();
+                PrintedActions.Add(new TargetLockAction());
 
-                factions.Add(Faction.Rebels);
-                faction = Faction.Rebels;
+                AssignTemporaryManeuvers();
+                HotacManeuverTable = new AI.UWingTable();
+
+                factions.Add(Faction.Rebel);
+                faction = Faction.Rebel;
 
                 SkinName = "White";
+
+                CurrentWingsPosition = WingsPositions.Closed;
 
                 SoundShotsPath = "Falcon-Fire";
                 ShotsCount = 3;
@@ -42,30 +53,37 @@ namespace Ship
                 {
                     SoundFlyPaths.Add("Falcon-Fly" + i);
                 }
-                
-            }
-
-            public override void InitializeShip()
-            {
-                base.InitializeShip();
-                BuiltInActions.Add(new ActionsList.TargetLockAction());
             }
 
             private void AssignTemporaryManeuvers()
             {
-                Maneuvers.Add("0.S.S", ManeuverColor.Red);
-                Maneuvers.Add("1.L.B", ManeuverColor.Green);
-                Maneuvers.Add("1.F.S", ManeuverColor.Green);
-                Maneuvers.Add("1.R.B", ManeuverColor.Green);
-                Maneuvers.Add("2.L.T", ManeuverColor.White);
-                Maneuvers.Add("2.L.B", ManeuverColor.Green);
-                Maneuvers.Add("2.F.S", ManeuverColor.Green);
-                Maneuvers.Add("2.R.B", ManeuverColor.Green);
-                Maneuvers.Add("2.R.T", ManeuverColor.White);
-                Maneuvers.Add("3.L.B", ManeuverColor.White);
-                Maneuvers.Add("3.F.S", ManeuverColor.White);
-                Maneuvers.Add("3.R.B", ManeuverColor.White);
-                Maneuvers.Add("4.F.S", ManeuverColor.White);            }
+                Maneuvers.Add("0.S.S", MovementComplexity.Complex);
+                Maneuvers.Add("1.L.B", MovementComplexity.Easy);
+                Maneuvers.Add("1.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("1.R.B", MovementComplexity.Easy);
+                Maneuvers.Add("2.L.T", MovementComplexity.Normal);
+                Maneuvers.Add("2.L.B", MovementComplexity.Easy);
+                Maneuvers.Add("2.F.S", MovementComplexity.Easy);
+                Maneuvers.Add("2.R.B", MovementComplexity.Easy);
+                Maneuvers.Add("2.R.T", MovementComplexity.Normal);
+                Maneuvers.Add("3.L.B", MovementComplexity.Normal);
+                Maneuvers.Add("3.F.S", MovementComplexity.Normal);
+                Maneuvers.Add("3.R.B", MovementComplexity.Normal);
+                Maneuvers.Add("4.F.S", MovementComplexity.Normal);
+            }
+
+            public void AdaptShipToSecondEdition()
+            {
+                ShipBaseSize = BaseSize.Medium;
+
+                Agility = 2;
+                MaxHull = 5;
+                MaxShields = 3;
+
+                PrintedActions.Add(new CoordinateAction() { IsRed = true });
+
+                IconicPilots[Faction.Rebel] = typeof(BenthicTwoTubes);
+            }
 
         }
     }

@@ -1,4 +1,8 @@
-﻿using System.Collections;
+﻿using BoardTools;
+using RuleSets;
+using RulesList;
+using Ship;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -8,8 +12,11 @@ namespace ActionsList
 
     public class TargetLockAction : GenericAction
     {
-        public TargetLockAction() {
+        public TargetLockAction()
+        {
             Name = EffectName = "Target Lock";
+
+            TokensSpend.Add(typeof(Tokens.BlueTargetLockToken));
             IsReroll = true;
         }
 
@@ -17,15 +24,28 @@ namespace ActionsList
         {
             if (Actions.HasTargetLockOn(Combat.Attacker, Combat.Defender))
             {
-                DiceRerollManager diceRerollManager = new DiceRerollManager()
-                {
-                    CallBack = callBack
-                };
-
                 char letter = ' ';
                 letter = Actions.GetTargetLocksLetterPair(Combat.Attacker, Combat.Defender);
 
-                Selection.ActiveShip.SpendToken(typeof(Tokens.BlueTargetLockToken), diceRerollManager.Start, letter);
+                if (Combat.Attacker.Tokens.GetToken(typeof(Tokens.BlueTargetLockToken), letter).CanBeUsed)
+                {
+                    DiceRerollManager diceRerollManager = new DiceRerollManager()
+                    {
+                        CallBack = callBack
+                    };
+
+                    Selection.ActiveShip.Tokens.SpendToken(typeof(Tokens.BlueTargetLockToken), diceRerollManager.Start, letter);
+                }
+                else
+                {
+                    Messages.ShowErrorToHuman("Cannot use current Target Lock on defender");
+                    callBack();
+                }
+            }
+            else
+            {
+                Messages.ShowErrorToHuman("No Target Lock on defender");
+                callBack();
             }
         }
 
@@ -67,9 +87,9 @@ namespace ActionsList
 
         public override void ActionTake()
         {
-            Phases.StartTemporarySubPhase(
+            Phases.StartTemporarySubPhaseOld(
                 "Select target for Target Lock",
-                typeof(SubPhases.SelectTargetLockSubPhase),
+                typeof(SubPhases.SelectTargetLockActionSubPhase),
                 Phases.CurrentSubPhase.CallBack
             );
         }
@@ -81,39 +101,100 @@ namespace ActionsList
 namespace SubPhases
 {
 
-    public class SelectTargetLockSubPhase : SelectShipSubPhase
+    public class SelectTargetLockActionSubPhase : AcquireTargetLockSubPhase
     {
-
-        public override void Prepare()
+        public override void RevertSubPhase()
         {
-            isEnemyAllowed = true;
-            finishAction = TrySelectTargetLock;
-
-            UI.ShowSkipButton();
-        }
-
-        private void TrySelectTargetLock()
-        {
-            Actions.AssignTargetLockToPair(
-                Selection.ThisShip,
-                TargetShip,
-                delegate {
-                    Phases.FinishSubPhase(typeof(SelectTargetLockSubPhase));
-                    CallBack();
-                },
-                RevertSubPhase
-            );
-        }
-
-        protected override void RevertSubPhase()
-        {
-            Selection.ThisShip.RemoveAlreadyExecutedAction(typeof(ActionsList.TargetLockAction));
-            base.RevertSubPhase();
+            Phases.FinishSubPhase(this.GetType());
+            RuleSet.Instance.ActionIsFailed(TheShip, typeof(ActionsList.TargetLockAction));
+            UpdateHelpInfo();
         }
 
         public override void SkipButton()
         {
             RevertSubPhase();
+        }
+
+        protected override void SuccessfulCallback()
+        {
+            Phases.FinishSubPhase(typeof(SelectTargetLockActionSubPhase));
+            base.SuccessfulCallback();
+        }
+    }
+
+    public class AcquireTargetLockSubPhase : SelectShipSubPhase
+    {
+
+        public override void Prepare()
+        {
+            CanMeasureRangeBeforeSelection = false;
+
+            if (AbilityName == null) AbilityName = "Target Lock";
+            if (Description == null) Description = "Choose a ship to acquire a target lock on it";
+
+            PrepareByParameters(
+                TrySelectTargetLock,
+                FilterTargetLockTargets,
+                GetAiPriority,
+                Selection.ThisShip.Owner.PlayerNo,
+                true,
+                AbilityName,
+                Description,
+                ImageUrl
+            );
+        }
+
+        private bool FilterTargetLockTargets(GenericShip ship)
+        {
+            DistanceInfo distanceInfo = new DistanceInfo(Selection.ThisShip, ship);
+            return ship.Owner.PlayerNo != Selection.ThisShip.Owner.PlayerNo && distanceInfo.Range >= Selection.ThisShip.TargetLockMinRange && distanceInfo.Range <= Selection.ThisShip.TargetLockMaxRange && Rules.TargetLocks.TargetLockIsAllowed(Selection.ThisShip, ship);
+        }
+
+        private int GetTargetLockAiPriority(GenericShip ship)
+        {
+            int result = 0;
+
+            ShotInfo shotInfo = new ShotInfo(Selection.ThisShip, ship, Selection.ThisShip.PrimaryWeapon);
+            if (shotInfo.IsShotAvailable) result += 1000;
+            if (!ship.ShipsBumped.Contains(Selection.ThisShip)) result += 500;
+            if (shotInfo.Range <= 3) result += 250;
+
+            result += ship.Cost + ship.UpgradeBar.GetUpgradesOnlyFaceup().Sum(n => n.Cost);
+
+            return result;
+        }
+
+        protected virtual void SuccessfulCallback()
+        {
+            UI.HideSkipButton();
+            CallBack();
+        }
+
+        protected virtual void TrySelectTargetLock()
+        {
+            if (Rules.TargetLocks.TargetLockIsAllowed(Selection.ThisShip, TargetShip))
+            {
+                Actions.AcquireTargetLock(
+                    Selection.ThisShip,
+                    TargetShip,
+                    SuccessfulCallback,
+                    RevertSubPhase
+                );
+            }
+            else
+            {
+                RevertSubPhase();
+            }
+        }
+
+        public override void RevertSubPhase()
+        {
+
+        }
+
+        public override void SkipButton()
+        {
+            CallBack();
         }
 
     }

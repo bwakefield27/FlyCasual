@@ -1,6 +1,9 @@
 ﻿using Upgrade;
 using UnityEngine;
 using Ship;
+using SubPhases;
+using Abilities;
+using System;
 
 namespace UpgradesList
 {
@@ -8,51 +11,47 @@ namespace UpgradesList
     {
         public DrawTheirFire() : base()
         {
-            Type = UpgradeType.Elite;
+            Types.Add(UpgradeType.Elite);
             Name = "Draw Their Fire";
             Cost = 1;
+
+            UpgradeAbilities.Add(new DrawTheirFireAbility());
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class DrawTheirFireAbility : GenericAbility
+    {
+
+        public override void ActivateAbility()
+        {
+            GenericShip.OnTryDamagePreventionGlobal += CheckDrawTheirFireAbility;
         }
 
-        public override void AttachToShip(GenericShip host)
+        public override void DeactivateAbility()
         {
-            base.AttachToShip(host);
-            GenericShip.OnAttackHitAsDefenderGlobal += CheckDrawTheirFireAbility;
-            Host.OnDestroyed += RemoveDrawTheirFireAbility;
+            GenericShip.OnTryDamagePreventionGlobal -= CheckDrawTheirFireAbility;
         }
 
         private void CheckDrawTheirFireAbility()
         {
-            if (Combat.Defender.Owner.PlayerNo == Host.Owner.PlayerNo && Combat.Defender.ShipId != Host.ShipId)
+            if (Combat.Defender.Owner.PlayerNo == HostShip.Owner.PlayerNo && Combat.Defender.ShipId != HostShip.ShipId)
             {
-                Board.ShipDistanceInformation distanceInfo = new Board.ShipDistanceInformation(Combat.Defender, Host);
+                BoardTools.DistanceInfo distanceInfo = new BoardTools.DistanceInfo(Combat.Defender, HostShip);
                 if (distanceInfo.Range == 1 && Combat.DiceRollAttack.CriticalSuccesses > 0)
                 {
-                    RegisterDrawTheirFireAbility();
+                    RegisterAbilityTrigger(TriggerTypes.OnTryDamagePrevention, UseDrawTheirFireAbility);
                 }
             }
-        }
-
-        private void RegisterDrawTheirFireAbility()
-        {
-            Triggers.RegisterTrigger(new Trigger()
-            {
-                Name = "Draw Their Fire",
-                TriggerType = TriggerTypes.OnAttackHit,
-                TriggerOwner = Host.Owner.PlayerNo,
-                EventHandler = UseDrawTheirFireAbility
-            });
         }
 
         private void UseDrawTheirFireAbility(object sender, System.EventArgs e)
         {
             if (Combat.DiceRollAttack.CriticalSuccesses > 0)
             {
-                Selection.ActiveShip = Host;
-                Phases.StartTemporarySubPhase(
-                    "Draw Their Fire",
-                    typeof(SubPhases.DrawTheirFireDecisionSubPhase),
-                    Triggers.FinishTrigger
-                );
+                AskToUseAbility(AlwaysUseByDefault, UseAbility, null, null, true);
             }
             else
             {
@@ -60,42 +59,19 @@ namespace UpgradesList
             }
         }
 
-        private void RemoveDrawTheirFireAbility(GenericShip ship)
-        {
-            GenericShip.OnAttackHitAsDefenderGlobal -= CheckDrawTheirFireAbility;
-        }
-    }
-}
-
-namespace SubPhases
-{
-
-    public class DrawTheirFireDecisionSubPhase : DecisionSubPhase
-    {
-
-        public override void Prepare()
-        {
-            infoText = "Use ability of Draw Their Fire?";
-
-            AddDecision("Yes", UseAbility);
-            AddDecision("No", DontUseAbility);
-
-            defaultDecision = "Yes";
-        }
-
         private void UseAbility(object sender, System.EventArgs e)
         {
             Die criticalHitDice = Combat.DiceRollAttack.DiceList.Find(n => n.Side == DieSide.Crit);
 
             Combat.DiceRollAttack.DiceList.Remove(criticalHitDice);
-            Selection.ActiveShip.AssignedDamageDiceroll.DiceList.Add(criticalHitDice);
+            HostShip.AssignedDamageDiceroll.DiceList.Add(criticalHitDice);
 
             Triggers.RegisterTrigger(new Trigger()
             {
                 Name = "Suffer damage from Draw Their Fire",
-                TriggerType = TriggerTypes.OnDamageIsDealt,
-                TriggerOwner = Selection.ActiveShip.Owner.PlayerNo,
-                EventHandler = Selection.ActiveShip.SufferDamage,
+                TriggerType = TriggerTypes.OnTryDamagePrevention,
+                TriggerOwner = HostShip.Owner.PlayerNo,
+                EventHandler = HostShip.SufferDamage,
                 EventArgs = new DamageSourceEventArgs()
                 {
                     Source = "Draw Their Fire",
@@ -103,20 +79,8 @@ namespace SubPhases
                 }
             });
 
-            Triggers.ResolveTriggers(TriggerTypes.OnDamageIsDealt, ConfirmDecision);
-        }
-
-        private void DontUseAbility(object sender, System.EventArgs e)
-        {
-            ConfirmDecision();
-        }
-
-        private void ConfirmDecision()
-        {
-            Phases.FinishSubPhase(this.GetType());
-            CallBack();
+            Triggers.ResolveTriggers(TriggerTypes.OnDamageIsDealt, DecisionSubPhase.ConfirmDecision);
         }
 
     }
-
 }

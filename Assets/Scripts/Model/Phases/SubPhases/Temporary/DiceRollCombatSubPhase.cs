@@ -17,6 +17,8 @@ namespace SubPhases
 
         public override void Start()
         {
+            base.Start();
+
             IsTemporary = true;
             CallBack = FinishAction;
 
@@ -32,38 +34,73 @@ namespace SubPhases
 
             if (Combat.AttackStep == CombatStep.Attack)
             {
-                Combat.ShowAttackAnimationAndSound();
+                ShowAttackAnimationAndSound();
+                Combat.Attacker.CallDiceAboutToBeRolled(RollDice);
             }
+            else
+            {
+                Combat.Defender.CallDiceAboutToBeRolled(RollDice);
+            }
+        }
 
-            DiceRoll DiceRollCheck;
-            DiceRollCheck = new DiceRoll(diceType, diceCount, DiceRollCheckType.Combat);
-            DiceRollCheck.Roll(ImmediatelyAfterRolling);
+        private void RollDice()
+        {
+            DiceRoll DiceRollCombat;
+            DiceRollCombat = new DiceRoll(diceType, diceCount, DiceRollCheckType.Combat);
+            DiceRollCombat.Roll(SyncDiceResults);
+        }
+
+        private void ShowAttackAnimationAndSound()
+        {
+            Upgrade.GenericSecondaryWeapon chosenSecondaryWeapon = Combat.ChosenWeapon as Upgrade.GenericSecondaryWeapon;
+            if (chosenSecondaryWeapon == null || chosenSecondaryWeapon.HasType(Upgrade.UpgradeType.Cannon) || chosenSecondaryWeapon.HasType(Upgrade.UpgradeType.Illicit))
+            { // Primary Weapons, Cannons, and Illicits (HotShotBlaster)
+                Sounds.PlayShots(Selection.ActiveShip.SoundShotsPath, Selection.ActiveShip.ShotsCount);
+                Selection.ThisShip.AnimatePrimaryWeapon();
+            }
+            else if (chosenSecondaryWeapon.HasType(Upgrade.UpgradeType.Torpedo) || chosenSecondaryWeapon.HasType(Upgrade.UpgradeType.Missile))
+            { // Torpedos and Missiles
+                Sounds.PlayShots("Proton-Torpedoes", 1);
+                Selection.ThisShip.AnimateMunitionsShot();
+            }
+            else if (chosenSecondaryWeapon.HasType(Upgrade.UpgradeType.Turret))
+            { // Turrets
+                Sounds.PlayShots(Selection.ActiveShip.SoundShotsPath, Selection.ActiveShip.ShotsCount);
+                Selection.ThisShip.AnimateTurretWeapon();
+            }
+        }
+
+        private void SyncDiceResults(DiceRoll diceroll)
+        {
+            if (!Network.IsNetworkGame)
+            {
+                ImmediatelyAfterRolling(diceroll);
+            }
+            else
+            {
+                Network.SyncDiceResults();
+            }
+        }
+
+        public void CalculateDice()
+        {
+            ImmediatelyAfterRolling(DiceRoll.CurrentDiceRoll);
         }
 
         private void ImmediatelyAfterRolling(DiceRoll diceroll)
         {
             Selection.ActiveShip = (Combat.AttackStep == CombatStep.Attack) ? Combat.Attacker : Combat.Defender;
-            Selection.ActiveShip.CallOnImmediatelyAfterRolling(diceroll);
+            Selection.ActiveShip.CallOnImmediatelyAfterRolling(diceroll, delegate { FinallyCheckResults(diceroll); });
+        }
+
+        private void FinallyCheckResults(DiceRoll diceroll)
+        {
             checkResults(diceroll);
         }
 
-        public void ToggleConfirmDiceResultsButton(bool isActive)
+        public void PrepareToggleConfirmButton(bool isActive)
         {
-            if (isActive)
-            {
-                if (Roster.GetPlayer(Selection.ActiveShip.Owner.PlayerNo).GetType() == typeof(Players.HumanPlayer))
-                {
-                    Button closeButton = GameObject.Find("UI/CombatDiceResultsPanel").transform.Find("DiceModificationsPanel/Confirm").GetComponent<Button>();
-                    closeButton.onClick.RemoveAllListeners();
-                    closeButton.onClick.AddListener(delegate { CallBack(); });
-
-                    closeButton.gameObject.SetActive(true);
-                }
-            }
-            else
-            {
-                GameObject.Find("UI").transform.Find("CombatDiceResultsPanel").Find("DiceModificationsPanel").Find("Confirm").gameObject.SetActive(false);
-            }
+            Roster.GetPlayer(Selection.ActiveShip.Owner.PlayerNo).ToggleCombatDiceResults(isActive);
         }
 
         protected virtual void CheckResults(DiceRoll diceRoll)
@@ -95,17 +132,19 @@ namespace SubPhases
                     MonoBehaviour.Destroy(button.gameObject);
                 }
             }
-            ToggleConfirmDiceResultsButton(false);
+            PrepareToggleConfirmButton(false);
         }
 
         public override void Pause()
         {
-            GameObject.Find("UI/CombatDiceResultsPanel").gameObject.SetActive(false);
+            GameObject.Find("UI").transform.Find("CombatDiceResultsPanel").gameObject.SetActive(false);
         }
 
         public override void Resume()
         {
-            GameObject.Find("UI/CombatDiceResultsPanel").gameObject.SetActive(true);
+            base.Resume();
+
+            GameObject.Find("UI").transform.Find("CombatDiceResultsPanel").gameObject.SetActive(true);
         }
 
         public override void Next()
@@ -114,16 +153,27 @@ namespace SubPhases
             UpdateHelpInfo();
         }
 
-        public override bool ThisShipCanBeSelected(Ship.GenericShip ship)
+        public override bool ThisShipCanBeSelected(Ship.GenericShip ship, int mouseKeyIsPressed)
         {
             bool result = false;
             return result;
         }
 
-        public override bool AnotherShipCanBeSelected(Ship.GenericShip anotherShip)
+        public override bool AnotherShipCanBeSelected(Ship.GenericShip anotherShip, int mouseKeyIsPressed)
         {
             bool result = false;
             return result;
+        }
+
+        public void ToggleConfirmButton(bool isActive)
+        {
+            Button closeButton = GameObject.Find("UI").transform.Find("CombatDiceResultsPanel").Find("DiceModificationsPanel").Find("Confirm").GetComponent<Button>();
+            if (isActive)
+            {
+                closeButton.onClick.RemoveAllListeners();
+                closeButton.onClick.AddListener(delegate { CallBack(); });
+            }
+            closeButton.gameObject.SetActive(isActive);
         }
 
     }

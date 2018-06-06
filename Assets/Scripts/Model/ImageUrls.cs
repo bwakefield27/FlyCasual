@@ -1,4 +1,7 @@
 ﻿using System;
+using Upgrade;
+using System.Collections;
+using System.Collections.Generic;
 
 public static class ImageUrls
 {
@@ -7,19 +10,19 @@ public static class ImageUrls
     private const string DamageDeckPath = "damage-decks/core-tfa/";
     private const string PilotsPath = "pilots/";
 
-    public static string GetImageUrl(Upgrade.GenericUpgrade upgrade, string filename = null)
+    public static string GetImageUrl(GenericUpgrade upgrade, string filename = null)
     {
-        return GetImageUrl(UpgradesPath + upgrade.Type.ToString(), upgrade.Name, filename);
+        return GetImageUrl(UpgradesPath + FormatUpgradeTypes(upgrade.Types), FormatUpgradeName(upgrade.Name), filename);
     }
 
-    public static string GetImageUrl(CriticalHitCard.GenericCriticalHit crit, string filename = null)
+    public static string GetImageUrl(GenericDamageCard crit, string filename = null)
     {
         return GetImageUrl(DamageDeckPath, crit.Name, filename);
     }
 
     public static string GetImageUrl(Ship.GenericShip ship, string filename = null)
     {
-        return GetImageUrl(PilotsPath + FormatFaction(ship.faction) + "/" + ship.Type, ship.PilotName, filename);
+        return GetImageUrl(PilotsPath + FormatFaction(ship.SubFaction) + "/" + FormatShipType(ship.Type), ship.PilotName, filename);
     }
 
     private static string GetImageUrl(string subpath, string cardName, string filename)
@@ -27,14 +30,50 @@ public static class ImageUrls
         return RootURL + subpath + "/" + (filename ?? FormatName(cardName) + ".png");
     }
 
-    private static string FormatFaction(Faction faction)
+    private static string FormatShipType(string type)
+    {
+        return type
+            .Replace("-Wing", "-wing")
+            .Replace("/FO", "/fo")
+            .Replace("TIE/SF", "TIE/sf")
+            .Replace('/', '-');
+    }
+
+    private static string FormatUpgradeTypes(List<UpgradeType> types)
+    {
+        string name = "";
+        UpgradeType type = types [0];
+        switch (type)
+        {
+            case UpgradeType.SalvagedAstromech:
+                name += "Salvaged Astromech";
+                break;
+            default:
+                name += type.ToString ();
+                break;
+        }
+        return name;
+    }
+
+    private static string FormatUpgradeName(string upgradeName)
+    {
+        return upgradeName.Replace('.', ' ');
+    }
+
+    private static string FormatFaction(SubFaction faction)
     {
         switch (faction)
         {
-            case Faction.Rebels:
+            case SubFaction.RebelAlliance:
                 return "Rebel Alliance";
-            case Faction.Empire:
+            case SubFaction.Resistance:
+                return "Resistance";
+            case SubFaction.GalacticEmpire:
                 return "Galactic Empire";
+            case SubFaction.FirstOrder:
+                return "First Order";
+            case SubFaction.ScumAndVillainy:
+                return "Scum and Villainy";
             default:
                 throw new NotImplementedException();
         }
@@ -44,8 +83,12 @@ public static class ImageUrls
     {
         return name
             .ToLower()
+            .Replace("(", "")
+            .Replace(")", "")
             .Replace(' ', '-')
-            .Replace('/', '-');
+            .Replace('/', '-')
+            .Replace('\'', '-')
+            .Replace("\"", "");
     }
 }
 

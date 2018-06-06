@@ -3,34 +3,45 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Upgrade;
+using Ship;
+using Abilities;
 
 namespace UpgradesList
 {
-
     public class SwarmTactics : GenericUpgrade
     {
 
         public SwarmTactics() : base()
         {
-            Type = UpgradeType.Elite;
+            Types.Add(UpgradeType.Elite);
             Name = "Swarm Tactics";
             Cost = 2;
+
+            UpgradeAbilities.Add(new SwarmTacticsAbility());
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class SwarmTacticsAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            Phases.OnCombatPhaseStart_Triggers += PlanSwarmTacticsPilotAbility;
         }
 
-        public override void AttachToShip(Ship.GenericShip host)
+        public override void DeactivateAbility()
         {
-            Host = host;
-            base.AttachToShip(host);
-
-            Phases.OnCombatPhaseStart += PlanSwarmTacticsPilotAbility;
+            Phases.OnCombatPhaseStart_Triggers -= PlanSwarmTacticsPilotAbility;
         }
 
         private void PlanSwarmTacticsPilotAbility()
         {
             Triggers.RegisterTrigger(new Trigger()
             {
-                Name = "#" + Host.ShipId + ": Swarm Tactics",
-                TriggerOwner = Host.Owner.PlayerNo,
+                Name = "#" + HostShip.ShipId + ": Swarm Tactics",
+                TriggerOwner = HostShip.Owner.PlayerNo,
                 TriggerType = TriggerTypes.OnCombatPhaseStart,
                 EventHandler = SwarmTacticsPilotAbility
             });
@@ -38,10 +49,10 @@ namespace UpgradesList
 
         private void SwarmTacticsPilotAbility(object sender, System.EventArgs e)
         {
-            Selection.ThisShip = Host;
-            if (Host.Owner.Ships.Count > 1)
+            Selection.ThisShip = HostShip;
+            if (HostShip.Owner.Ships.Count > 1)
             {
-                Phases.StartTemporarySubPhase(
+                Phases.StartTemporarySubPhaseOld(
                     "Select target for Swarm Tactics",
                     typeof(SubPhases.SelectSwarmTacticsTargetSubPhase),
                     Triggers.FinishTrigger
@@ -65,11 +76,33 @@ namespace SubPhases
 
         public override void Prepare()
         {
-            isFriendlyAllowed = true;
+            targetsAllowed.Add(TargetTypes.OtherFriendly);
             maxRange = 1;
             finishAction = SelectSwarmTacticsTarget;
 
+            FilterTargets = FilterAbilityTargets;
+            GetAiPriority = GetAiAbilityPriority;
+
+            RequiredPlayer = Selection.ThisShip.Owner.PlayerNo;
+
             UI.ShowSkipButton();
+        }
+
+        private bool FilterAbilityTargets(GenericShip ship)
+        {
+            BoardTools.DistanceInfo distanceInfo = new BoardTools.DistanceInfo(Selection.ThisShip, ship);
+            return (distanceInfo.Range == 1) && (ship.Owner.PlayerNo == Selection.ThisShip.Owner.PlayerNo) && (ship.ShipId != Selection.ThisShip.ShipId);
+        }
+
+        private int GetAiAbilityPriority(GenericShip ship)
+        {
+            int result = 0;
+            if (Actions.HasTarget(ship)) result += 100;
+            result += (12 - ship.PilotSkill);
+
+            if (ship.PilotSkill >= Selection.ThisShip.PilotSkill) result = 0;
+
+            return result;
         }
 
         private void SelectSwarmTacticsTarget()
@@ -81,20 +114,20 @@ namespace SubPhases
             CallBack();
         }
 
-        protected override void RevertSubPhase() { }
+        public override void RevertSubPhase() { }
 
-        private class SwarmTacticsPilotSkillModifier : Ship.IModifyPilotSkill
+        private class SwarmTacticsPilotSkillModifier : IModifyPilotSkill
         {
-            private Ship.GenericShip host;
+            private GenericShip host;
             private int newPilotSkill;
 
-            public SwarmTacticsPilotSkillModifier(Ship.GenericShip host, int newPilotSkill)
+            public SwarmTacticsPilotSkillModifier(GenericShip host, int newPilotSkill)
             {
                 this.host = host;
                 this.newPilotSkill = newPilotSkill;
 
                 host.AddPilotSkillModifier(this);
-                Phases.OnEndPhaseStart += RemoveSwarmTacticsModifieer;
+                Phases.OnEndPhaseStart_NoTriggers += RemoveSwarmTacticsModifieer;
             }
 
             public void ModifyPilotSkill(ref int pilotSkill)
@@ -105,6 +138,8 @@ namespace SubPhases
             private void RemoveSwarmTacticsModifieer()
             {
                 host.RemovePilotSkillModifier(this);
+
+                Phases.OnEndPhaseStart_NoTriggers -= RemoveSwarmTacticsModifieer;
             }
         }
 

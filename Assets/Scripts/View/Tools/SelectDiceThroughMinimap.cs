@@ -15,7 +15,7 @@ public class SelectDiceThroughMinimap : MonoBehaviour {
 	// Update is called once per frame
 	void Update ()
     {
-        if (DiceRerollManager.currentDiceRerollManager != null)
+        if (DiceRerollManager.CurrentDiceRerollManager != null)
         {
             if (Input.GetMouseButtonDown(0))
             {
@@ -40,6 +40,9 @@ public class SelectDiceThroughMinimap : MonoBehaviour {
 
     private void TrySelectDice(GameObject Dice)
     {
-        Combat.CurentDiceRoll.TrySelectDiceByModel(Dice);
+        if (Roster.GetPlayer(Phases.CurrentPhasePlayer).GetType() == typeof(Players.HumanPlayer))
+        {
+            Combat.CurrentDiceRoll.TrySelectDiceByModel(Dice);
+        }
     }
 }

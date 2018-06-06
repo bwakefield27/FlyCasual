@@ -1,10 +1,12 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using Ship;
 using UnityEngine;
 
-namespace Board
+namespace BoardTools
 {
-    public static partial class BoardManager
+    public static partial class Board
     {
 
         public static Transform BoardTransform;
@@ -21,6 +23,9 @@ namespace Board
         public static readonly float DISTANCE_1 = 4f;
         public static readonly float RANGE_1 = 10f;
 
+        //TODO: Rework
+        public static readonly float DISTANCE_INTO_RANGE = 3.28f / 3f;
+
         public static void Initialize()
         {
             BoardTransform = GameObject.Find("SceneHolder/Board").transform;
@@ -28,21 +33,32 @@ namespace Board
             StartingZone1 = BoardTransform.Find("Playmat/StaringZone1").gameObject;
             StartingZone2 = BoardTransform.Find("Playmat/StaringZone2").gameObject;
 
+            MovementTemplates.PrepareMovementTemplates();
+
             SetPlaymatImage();
+            SetObstacles();
         }
 
         private static void SetPlaymatImage()
         {
-            Texture playmatTexture = (Texture)Resources.Load("Playmats/Playmat" + Options.Playmat + "Texture", typeof(Texture));
-            BoardTransform.Find("Playmat").GetComponent<Renderer>().material.mainTexture = playmatTexture;        
+            if (!string.IsNullOrEmpty(Options.Playmat))
+            {
+                Texture playmatTexture = (Texture)Resources.Load("Playmats/Playmat" + Options.Playmat + "Texture", typeof(Texture));
+                BoardTransform.Find("Playmat").GetComponent<Renderer>().material.mainTexture = playmatTexture;
+            }
         }
 
-        private static void SetShip(Ship.GenericShip ship, int count)
+        private static void SetShipPreSetup(GenericShip ship, int count)
         {
             float distance = CalculateDistance(ship.Owner.Ships.Count);
             float side = (ship.Owner.PlayerNo == Players.PlayerNo.Player1) ? -1 : 1;
-            ship.SetPosition(BoardIntoWorld(new Vector3(-SIZE_X / 2 + count * distance, 0, side * SIZE_Y / 2 + +side * 2 * RANGE_1)));
-            ship.SetPosition(BoardIntoWorld(new Vector3(-SIZE_X / 2 + count * distance, 0, side * SIZE_Y / 2 + -side * 2 * RANGE_1)));
+            ship.SetPosition(
+                BoardIntoWorld(
+                    new Vector3(-SIZE_X / 2 + count * distance, 0, side * (SIZE_Y / 2 + DISTANCE_1))
+                )
+            );
+
+            RegisterBoardObject(ship);
         }
 
         public static void HighlightStartingZones()
@@ -55,26 +71,6 @@ namespace Board
         {
             StartingZone1.SetActive(false);
             StartingZone2.SetActive(false);
-        }
-
-        public static void SetShips(Dictionary<string, Ship.GenericShip> shipsPlayer1, Dictionary<string, Ship.GenericShip> shipsPlayer2)
-        {
-
-            int i = 1;
-            foreach (var ship in shipsPlayer1)
-            {
-                float distance = CalculateDistance(shipsPlayer1.Count);
-                ship.Value.SetPosition(BoardIntoWorld(new Vector3(- SIZE_X / 2 + i *distance, 0, -SIZE_Y/2 + 2*RANGE_1)));
-                i++;
-            }
-
-            i = 1;
-            foreach (var ship in shipsPlayer2)
-            {
-                float distance = CalculateDistance(shipsPlayer2.Count);
-                ship.Value.SetPosition(BoardIntoWorld(new Vector3(- SIZE_X / 2 + i * distance, 0, SIZE_Y/2 - 2*RANGE_1)));
-                i++;
-            }
         }
 
         //SCALING TOOLS
@@ -143,6 +139,68 @@ namespace Board
             return result;
         }
 
-    }
+        //util functions
+        public static int GetRangeOfShips(GenericShip from, GenericShip to)
+        {
+            DistanceInfo positionInfo = new DistanceInfo(from, to);
+            return positionInfo.Range;
+        }
 
+        public static List<GenericShip> GetShipsAtRange(GenericShip ship, Vector2 fromto, Team.Type team = Team.Type.Any)
+        {
+            List<GenericShip> ships = new List<GenericShip>();
+            foreach (var kv in Roster.AllShips)
+            {
+                GenericShip othership = kv.Value;
+
+                if (team == Team.Type.Friendly && ship.Owner.Id != othership.Owner.Id)
+                    continue;
+
+                if (team == Team.Type.Enemy && ship.Owner.Id == othership.Owner.Id)
+                    continue;
+
+                int range = GetRangeOfShips(ship, othership);
+                if (range >= fromto.x && range <= fromto.y)
+                {
+                    ships.Add(othership);
+                }
+            }
+
+            return ships;
+        }
+
+        private static void SetObstacles()
+        {
+            for (int i = 1; i <= 6; i++)
+            {
+                Objects.Add(GameObject.Find("SceneHolder/Board/ObstaclesHolder/A" + i + "/A" + i + "model").GetComponent<MeshCollider>());
+            }
+        }
+
+        public static void ToggleObstaclesHolder(bool isActive)
+        {
+            BoardTransform.Find("ObstaclesHolder").gameObject.SetActive(isActive);
+        }
+
+        public static void ToggleDiceHolders(bool isActive)
+        {
+            BoardTransform.Find("CombatDiceHolder").gameObject.SetActive(isActive);
+            BoardTransform.Find("CheckDiceHolder").gameObject.SetActive(isActive);
+        }
+
+        public static void ToggleOffTheBoardHolder(bool isActive)
+        {
+            BoardTransform.Find("OffTheBoardHolder").gameObject.SetActive(isActive);
+        }
+    }
+}
+
+namespace Team
+{
+    public enum Type
+    {
+         Friendly,
+         Enemy,
+         Any
+    }
 }

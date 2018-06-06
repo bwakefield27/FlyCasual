@@ -9,6 +9,7 @@ namespace Ship
     public enum BaseSize
     {
         Small,
+        Medium,
         Large
     }
 
@@ -18,6 +19,8 @@ namespace Ship
         public BaseSize Size { get; protected set; }
         public string PrefabPath { get; protected set; }
         public string TemporaryPrefabPath { get; protected set; }
+
+        private Dictionary<string, Vector3> baseEdges = new Dictionary<string, Vector3>();
 
         protected Dictionary<string, Vector3> standFrontEdgePoints = new Dictionary<string, Vector3>();
         private Dictionary<string, Vector3> standFrontPoints = new Dictionary<string, Vector3>();
@@ -31,6 +34,7 @@ namespace Ship
         public float SHIPSTAND_SIZE { get; protected set; }
         public float SHIPSTAND_SIZE_CM { get; protected set; }
         public float HALF_OF_FIRINGARC_SIZE { get; protected set; }
+        public float HALF_OF_BULLSEYEARC_SIZE { get { return 0.25f; } }
 
         public GenericShipBase(GenericShip host)
         {
@@ -50,12 +54,19 @@ namespace Ship
             shipBase.transform.localPosition = Vector3.zero;
             shipBase.name = "ShipBase";
 
+            Host.GetShipAllPartsTransform().localPosition = Host.GetShipAllPartsTransform().localPosition + new Vector3(0, 0, -HALF_OF_SHIPSTAND_SIZE);
+
             SetShipBaseEdges();
         }
 
         private void SetShipBaseEdges()
         {
             int PRECISION = 20;
+
+            baseEdges.Add("LF", new Vector3(-HALF_OF_SHIPSTAND_SIZE, 0f, 0f));
+            baseEdges.Add("RF", new Vector3(HALF_OF_SHIPSTAND_SIZE, 0f, 0f));
+            baseEdges.Add("LB", new Vector3(-HALF_OF_SHIPSTAND_SIZE, 0f, -2 * HALF_OF_SHIPSTAND_SIZE));
+            baseEdges.Add("RB", new Vector3(HALF_OF_SHIPSTAND_SIZE, 0f, -2 * HALF_OF_SHIPSTAND_SIZE));
 
             standEdgePoints.Add("LF", new Vector3(-HALF_OF_SHIPSTAND_SIZE, 0f, 0f));
             standEdgePoints.Add("CF", Vector3.zero);
@@ -69,12 +80,11 @@ namespace Ship
             standFrontEdgePoints.Add("LF", new Vector3(-HALF_OF_FIRINGARC_SIZE, 0f, 0f));
             standFrontEdgePoints.Add("CF", Vector3.zero);
             standFrontEdgePoints.Add("RF", new Vector3(HALF_OF_FIRINGARC_SIZE, 0f, 0f));
-
-            standFrontPoints = new Dictionary<string, Vector3>(standFrontEdgePoints);
             for (int i = 1; i < PRECISION + 1; i++)
             {
                 Vector3 newPoint = new Vector3((float)i * ((2 * HALF_OF_FIRINGARC_SIZE) / (float)(PRECISION + 1)) - HALF_OF_FIRINGARC_SIZE, 0f, 0f);
                 standFrontPoints.Add("F" + i, newPoint);
+
                 standPoints.Add("F" + i, newPoint);
             }
 
@@ -129,6 +139,11 @@ namespace Ship
             return Host.Model.transform.Find("RotationHelper").TransformPoint(standEdgePoints["CB"]);
         }
 
+        public Dictionary<string, Vector3> GetBaseEdges()
+        {
+            return GetPoints(baseEdges);
+        }
+
         public Dictionary<string, Vector3> GetStandEdgePoints()
         {
             return GetPoints(standEdgePoints);
@@ -180,6 +195,21 @@ namespace Ship
             return edges;
         }
 
+        public List<Vector3> GetGlobalPoints(List<Vector3> localPoints)
+        {
+            List<Vector3> globalPoints = new List<Vector3>();
+            foreach (var localPoint in localPoints)
+            {
+                globalPoints.Add(GetGlobalPoint(localPoint));
+            }
+            return globalPoints;
+        }
+
+        public Vector3 GetGlobalPoint(Vector3 localPoint)
+        {
+            return Host.Model.transform.TransformPoint(localPoint);
+        }
+
         //TODO: Remove as old
         public bool IsInside(Transform zone)
         {
@@ -217,7 +247,7 @@ namespace Ship
 
         public float GetShipBaseDistance()
         {
-            float result = Board.BoardManager.GetBoard().TransformVector(new Vector3(SHIPSTAND_SIZE_CM, 0, 0)).x;
+            float result = BoardTools.Board.GetBoard().TransformVector(new Vector3(SHIPSTAND_SIZE_CM, 0, 0)).x;
             return result;
         }
 

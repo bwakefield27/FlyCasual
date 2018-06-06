@@ -1,5 +1,8 @@
 ﻿using Upgrade;
 using UnityEngine;
+using Ship;
+using Abilities;
+using ActionsList;
 
 namespace UpgradesList
 {
@@ -7,22 +10,36 @@ namespace UpgradesList
     {
         public Expose() : base()
         {
-            Type = UpgradeType.Elite;
+            Types.Add(UpgradeType.Elite);
             Name = "Expose";
             Cost = 4;
+
+            UpgradeAbilities.Add(new ExposeAbility());
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class ExposeAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.AfterGenerateAvailableActionsList += ExposeAddAction;
         }
 
-        public override void AttachToShip(Ship.GenericShip host)
+        public override void DeactivateAbility()
         {
-            base.AttachToShip(host);
-
-            host.AfterGenerateAvailableActionsList += MarksmanshipAddAction;
+            HostShip.AfterGenerateAvailableActionsList -= ExposeAddAction;
         }
 
-        private void MarksmanshipAddAction(Ship.GenericShip host)
+        private void ExposeAddAction(GenericShip host)
         {
-            ActionsList.GenericAction newAction = new ActionsList.ExposeAction();
-            newAction.ImageUrl = ImageUrl;
+            GenericAction newAction = new ExposeAction
+            {
+                ImageUrl = HostUpgrade.ImageUrl,
+                Host = host
+            };
             host.AddAvailableAction(newAction);
         }
     }
@@ -50,9 +67,10 @@ namespace ActionsList
             Host.ChangeFirepowerBy(+1);
             Host.ChangeAgilityBy(-1);
 
-            Phases.OnEndPhaseStart += RemoveExposeEffect;
+            Phases.OnEndPhaseStart_NoTriggers += RemoveExposeEffect;
 
-            Host.AssignToken(new Conditions.ExposeCondition(), Phases.CurrentSubPhase.CallBack);
+            Host.Tokens.AssignCondition(new Conditions.ExposeCondition(Host));
+            Phases.CurrentSubPhase.CallBack();
         }
 
         private void RemoveExposeEffect()
@@ -60,14 +78,12 @@ namespace ActionsList
             Host.ChangeFirepowerBy(-1);
             Host.ChangeAgilityBy(+1);
 
-            Phases.OnEndPhaseStart -= RemoveExposeEffect;
+            Phases.OnEndPhaseStart_NoTriggers -= RemoveExposeEffect;
         }
 
         public override int GetActionPriority()
         {
-            int result = 0;
-            if (Actions.HasTarget(Selection.ThisShip)) result = 60;
-            return result;
+            return 10;
         }
 
     }
@@ -79,10 +95,9 @@ namespace Conditions
 
     public class ExposeCondition : Tokens.GenericToken
     {
-        public ExposeCondition()
+        public ExposeCondition(GenericShip host) : base(host)
         {
             Name = "Buff Token";
-            Temporary = false;
             Tooltip = new UpgradesList.Expose().ImageUrl;
         }
     }

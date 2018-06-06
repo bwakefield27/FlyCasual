@@ -1,6 +1,10 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System;
+using Ship;
+using Players;
+using UnityEngine.UI;
 
 public enum Sorting
 {
@@ -17,7 +21,7 @@ namespace SubPhases
 
         public string Name;
 
-        public System.Action CallBack;
+        public Action CallBack;
 
         public bool IsTemporary = false;
 
@@ -28,61 +32,47 @@ namespace SubPhases
             set { canBePaused = value; }
         }
 
+        private GenericShip theShip;
+        public GenericShip TheShip
+        {
+            get { return theShip ?? Selection.ThisShip; }
+            set { theShip = value; }
+        }
+
         public int RequiredPilotSkill;
-        public Players.PlayerNo RequiredPlayer = Players.PlayerNo.Player1;
+        public PlayerNo RequiredPlayer = PlayerNo.Player1;
 
         protected const int PILOTSKILL_MIN = 0;
         protected const int PILOTSKILL_MAX = 12;
 
         public virtual void Start()
         {
-            
+            Roster.HighlightPlayer(RequiredPlayer);
         }
 
-        public virtual void Prepare()
-        {
+        public virtual void Prepare() { }
 
-        }
+        public virtual void Initialize() { }
 
-        public virtual void Initialize()
-        {
-
-        }
-
-        public virtual void Pause()
-        {
-
-        }
+        public virtual void Pause() { }
 
         public virtual void Resume()
         {
-
+            Roster.HighlightPlayer(RequiredPlayer);
         }
 
-        public virtual void Update()
-        {
+        public virtual void Update() { }
 
-        }
+        public virtual void ProcessClick() { }
 
-        public virtual void ProcessClick()
-        {
+        public virtual void Next() { }
 
-        }
+        public virtual void FinishPhase() { }
 
-        public virtual void Next()
-        {
-
-        }
-
-        public virtual void FinishPhase()
-        {
-
-        }
-
-        public virtual bool ThisShipCanBeSelected(Ship.GenericShip ship)
+        public virtual bool ThisShipCanBeSelected(GenericShip ship, int mouseKeyIsPressed)
         {
             bool result = false;
-            if ((ship.Owner.PlayerNo == RequiredPlayer) && (ship.PilotSkill == RequiredPilotSkill))
+            if ((ship.Owner.PlayerNo == RequiredPlayer) && (ship.PilotSkill == RequiredPilotSkill) && (Roster.GetPlayer(RequiredPlayer).GetType() == typeof(Players.HumanPlayer)))
             {
                 result = true;
             }
@@ -93,7 +83,7 @@ namespace SubPhases
             return result;
         }
 
-        public virtual bool AnotherShipCanBeSelected(Ship.GenericShip targetShip)
+        public virtual bool AnotherShipCanBeSelected(GenericShip targetShip, int mouseKeyIsPressed)
         {
             bool result = false;
             Messages.ShowErrorToHuman("Ship of another player");
@@ -101,7 +91,7 @@ namespace SubPhases
         }
 
         //TODO: What is this?
-        public virtual int CountActiveButtons(Ship.GenericShip ship)
+        public virtual int CountActiveButtons(GenericShip ship)
         {
             int result = 0;
             return result;
@@ -126,19 +116,38 @@ namespace SubPhases
             Phases.UpdateHelpInfo();
         }
 
-        public virtual void DoDefault()
-        {
+        public virtual void DoDefault() { }
 
+        public virtual void NextButton() { }
+
+        public virtual void SkipButton() { }
+
+        public virtual void DoSelectThisShip(GenericShip ship, int mouseKeyIsPressed) { }
+
+        public virtual void DoSelectAnotherShip(GenericShip ship, int mouseKeyIsPressed) { }
+
+        protected void HideSubphaseDescription()
+        {
+            GameObject subphaseDescriptionGO = GameObject.Find("UI").transform.Find("CurrentSubphaseDescription").gameObject;
+            subphaseDescriptionGO.SetActive(false);
+
+            subphaseDescriptionGO = GameObject.Find("UI").transform.Find("CurrentSubphaseDescriptionNoImage").gameObject;
+            subphaseDescriptionGO.SetActive(false);
         }
 
-        public virtual void NextButton()
+        protected void ShowSubphaseDescription(string title, string description, string imageUrl = null)
         {
+            HideSubphaseDescription();
+            if (Roster.GetPlayer(RequiredPlayer).GetType() == typeof(HumanPlayer))
+            {
+                GameObject subphaseDescriptionGO = GameObject.Find("UI").transform.Find("CurrentSubphaseDescription" + ((imageUrl != null) ? "" : "NoImage")).gameObject; 
+                 
+                subphaseDescriptionGO.transform.Find("AbilityName").GetComponent<Text>().text = title;
+                subphaseDescriptionGO.transform.Find("Description").GetComponent<Text>().text = description;
+                if (imageUrl != null) subphaseDescriptionGO.transform.Find("CardImage").GetComponent<SmallCardArt>().Initialize(imageUrl);
 
-        }
-
-        public virtual void SkipButton()
-        {
-
+                subphaseDescriptionGO.SetActive(true);
+            }
         }
 
     }

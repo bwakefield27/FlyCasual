@@ -7,21 +7,23 @@ namespace UpgradesList
     {
         public ShieldUpgrade() : base()
         {
-            Type = UpgradeType.Modification;
+            Types.Add(UpgradeType.Modification);
             Name = "Shield Upgrade";
             Cost = 4;
         }
 
-        public override void AttachToShip(GenericShip host)
+        public override void PreAttachToShip(GenericShip host)
         {
-            base.AttachToShip(host);
-            host.ChangeShieldBy(1);
-            host.AfterGetMaxShields += IncreaseMaxShields;
+            base.PreAttachToShip(host);
+
+            Host.MaxShields++;
         }
 
-        private void IncreaseMaxShields(ref int maxShields)
+        public override void PreDettachFromShip()
         {
-            maxShields++;
+            base.PreDettachFromShip();
+
+            Host.MaxShields--;
         }
     }
 }

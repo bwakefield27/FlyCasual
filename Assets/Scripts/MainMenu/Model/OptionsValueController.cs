@@ -7,20 +7,35 @@ public class OptionsValueController : MonoBehaviour
 {
     public void Start()
     {
-        SetValue(PlayerPrefs.GetInt(this.transform.Find("Text").GetComponent<Text>().text, 4));
+        SetValue(PlayerPrefs.GetFloat(this.transform.Find("Text").GetComponent<Text>().text, 0.25f));
     }
 
-    public void SetValue(int value)
+    public void UpdateProgressByClick()
     {
-        Options.ChangeParameterValue(this.transform.Find("Text").GetComponent<Text>().text, value);
-        PlayerPrefs.Save();
+        float UiScale = GameObject.Find("UI").GetComponent<RectTransform>().localScale.x;
+        float percentage = (Input.mousePosition.x - this.gameObject.transform.position.x - (20f * UiScale)) / (595f * UiScale);
 
-        int i = 1;
-        foreach (Transform scalePanel in this.transform.Find("ValueList"))
+        string optionName = this.transform.Find("Text").GetComponent<Text>().text;
+        if (optionName.Contains("Speed"))
         {
-            scalePanel.GetComponent<Image>().color = (i <= value) ? Color.blue : new Color(1, 1, 1, 100f/255f);
-            i++;
+            if (percentage < 0.05f) percentage = 0.05f;
         }
+        else
+        {
+            if (percentage < 0.05f) percentage = 0f;
+        }
+
+        if (percentage > 0.95f) percentage = 1f;
+
+        SetValue(percentage);
+    }
+
+    public void SetValue(float percentage)
+    {
+        Options.ChangeParameterValue(this.transform.Find("Text").GetComponent<Text>().text, percentage);
+
+        this.transform.Find("ValueList/PanelValue").GetComponent<RectTransform>().sizeDelta = new Vector2(595f * percentage, 50);
+        this.transform.Find("ValueList/PanelEmpty").GetComponent<RectTransform>().sizeDelta = new Vector2(595f * (1f - percentage), 50);
     }
 
 }

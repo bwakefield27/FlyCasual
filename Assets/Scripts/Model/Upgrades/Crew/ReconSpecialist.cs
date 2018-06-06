@@ -1,5 +1,8 @@
 ﻿using ActionsList;
+using UnityEngine;
 using Upgrade;
+using Abilities;
+using RuleSets;
 
 namespace UpgradesList
 {
@@ -7,32 +10,55 @@ namespace UpgradesList
     {
         public ReconSpecialist() : base()
         {
-            Type = UpgradeType.Crew;
+            Types.Add(UpgradeType.Crew);
             Name = "Recon Specialist";
             Cost = 3;
+
+            AvatarOffset = new Vector2(42, 3);
+
+            UpgradeAbilities.Add(new ReconSpecialistAbility());
         }
-        public override void AttachToShip(Ship.GenericShip host)
+    }
+}
+
+namespace Abilities
+{
+    public class ReconSpecialistAbility : GenericAbility
+    {
+        public override void ActivateAbility()
         {
-            base.AttachToShip(host);
+            HostShip.OnActionIsPerformed += CheckConditions;
+        }
 
-            host.OnActionIsPerformed += RegisterTrigger;
-       } 
+        public override void DeactivateAbility()
+        {
+            HostShip.OnActionIsPerformed -= CheckConditions;
+        }
 
-        private void RegisterTrigger(GenericAction action)
+        private void CheckConditions(GenericAction action)
         {
             if (action is FocusAction)
-                Triggers.RegisterTrigger(new Trigger()
-                    {
-                        Name = "Recon Specialist's ability",
-                        TriggerType = TriggerTypes.OnActionDecisionSubPhaseEnd,
-                        TriggerOwner = Host.Owner.PlayerNo,
-                        EventHandler = ReconSpecialistAbility
-                    });
+            {
+                HostShip.OnActionDecisionSubphaseEnd += RegisterTrigger;
+            }
         }
 
-        private void ReconSpecialistAbility(object sender, System.EventArgs e)
+        private void RegisterTrigger(Ship.GenericShip ship)
         {
-            Host.AssignToken(new Tokens.FocusToken(), Triggers.FinishTrigger);
+            HostShip.OnActionDecisionSubphaseEnd -= RegisterTrigger;
+
+            Triggers.RegisterTrigger(new Trigger()
+            {
+                Name = "Recon Specialist's ability",
+                TriggerType = TriggerTypes.OnActionDecisionSubPhaseEnd,
+                TriggerOwner = HostShip.Owner.PlayerNo,
+                EventHandler = DoReconSpecialistAbility
+            });
+        }
+
+        private void DoReconSpecialistAbility(object sender, System.EventArgs e)
+        {
+            HostShip.Tokens.AssignToken(new Tokens.FocusToken(HostShip), Triggers.FinishTrigger);
         }
     }
 }

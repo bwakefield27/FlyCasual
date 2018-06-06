@@ -1,15 +1,18 @@
-﻿using Upgrade;
+﻿using Abilities;
+using ActionsList;
+using Upgrade;
 
 namespace UpgradesList
 { 
-	public class EngineUpgrade : GenericActionBarUpgrade<ActionsList.BoostAction>
+	public class EngineUpgrade : GenericUpgrade
 	{
 		public EngineUpgrade() : base()
 		{
-			Type = UpgradeType.Modification;
+            Types.Add(UpgradeType.Modification);
 			Name = "Engine Upgrade";
 			Cost = 4;
-		}        
+            UpgradeAbilities.Add(new GenericActionBarAbility<BoostAction>());
+        }        
 	}
 }
 

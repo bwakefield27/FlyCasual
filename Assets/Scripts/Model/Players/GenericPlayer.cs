@@ -2,12 +2,24 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Ship;
 
 public enum Faction
 {
-    Rebels,
-    Empire,
+    None,
+    Rebel,
+    Imperial,
     Scum
+}
+
+public enum SubFaction
+{
+    None,
+    RebelAlliance,
+    Resistance,
+    GalacticEmpire,
+    FirstOrder,
+    ScumAndVillainy
 }
 
 namespace Players
@@ -21,7 +33,8 @@ namespace Players
     public enum PlayerType
     {
         Human,
-        Ai
+        Ai,
+        Network
     }
 
     public partial class GenericPlayer
@@ -30,41 +43,128 @@ namespace Players
         public string Name;
         public PlayerNo PlayerNo;
         public int SquadCost;
-        public Dictionary<string, Ship.GenericShip> Ships = new Dictionary<string, Ship.GenericShip>();
 
-        private int id;
+        public string NickName;
+        public string Title;
+        public string Avatar;
+
+        public GameObject PlayerInfoPanel;
+
+        public Dictionary<string, GenericShip> Ships = new Dictionary<string, GenericShip>();
+
+        public Dictionary<string, GenericShip> EnemyShips
+        {
+            get
+            {
+                return AnotherPlayer.Ships;
+            }
+        }
+
+        public GenericPlayer AnotherPlayer
+        {
+            get
+            {
+                return Roster.GetPlayer(Roster.AnotherPlayer(PlayerNo));
+            }
+        }
+
         public int Id { get { return (PlayerNo == PlayerNo.Player1) ? 1 : 2; } }
 
-        public GenericPlayer()
+        public void SetPlayerNo(PlayerNo playerNo)
         {
-            SetPlayerNo();
+            PlayerNo = playerNo;
         }
 
-        private void SetPlayerNo()
+        public virtual void SetupShip()
         {
-            PlayerNo = (Roster.Players.Count == 0) ? PlayerNo.Player1 : PlayerNo.Player2;
-            Roster.Players.Add(this);
+            Roster.HighlightPlayer(PlayerNo);
         }
 
-        public virtual void SetupShip() { }
+        public virtual void AssignManeuver()
+        {
+            Roster.HighlightPlayer(PlayerNo);
+        }
 
-        public virtual void AssignManeuver() { }
+        public virtual void PerformManeuver()
+        {
+            Roster.HighlightPlayer(PlayerNo);
+        }
 
-        public virtual void PerformManeuver() { }
+        public virtual void PerformAttack()
+        {
+            Roster.HighlightPlayer(PlayerNo);
+        }
 
-        public virtual void PerformAction() { }
+        public virtual void UseOwnDiceModifications()
+        {
+            Roster.HighlightPlayer(PlayerNo);
+        }
 
-        public virtual void PerformFreeAction() { }
+        public virtual void UseOppositeDiceModifications()
+        {
+            Roster.HighlightPlayer(PlayerNo);
+        }
 
-        public virtual void PerformAttack() { }
-
-        public virtual void UseOwnDiceModifications() { }
-
-        public virtual void UseOppositeDiceModifications() { }
+        public virtual void UseCompareResultsDiceModifications()
+        {
+            Roster.HighlightPlayer(PlayerNo);
+        }
 
         public virtual void TakeDecision() { }
 
         public virtual void AfterShipMovementPrediction() { }
+
+        public virtual void ConfirmDiceCheck() { }
+
+        public virtual void ToggleCombatDiceResults(bool isActive) { }
+
+        public virtual bool IsNeedToShowManeuver(GenericShip ship) { return false; }
+
+        public virtual void OnTargetNotLegalForAttack() { }
+
+        public virtual void ChangeManeuver(Action<string> callback, Func<string, bool> filter = null) { }
+
+        public virtual void SelectManeuver(Action<string> callback, Func<string, bool> filter = null) { }
+
+        public virtual void StartExtraAttack() { }
+
+        public virtual void SelectShipForAbility() { }
+
+        public virtual void SelectObstacleForAbility() { }
+
+        public float AveragePilotSkillOfRemainingShips()
+        {
+            float pilotSkillValue = 0;
+            foreach (GenericShip s in Ships.Values)
+            {
+                pilotSkillValue += s.PilotSkill;
+            }
+            return Math.Max(0, pilotSkillValue / Ships.Count);
+        }
+
+        public float AveragePilotSkillOfRemainingEnemyShips()
+        {
+            float pilotSkillValue = 0;
+            foreach (GenericShip s in EnemyShips.Values)
+            {
+                pilotSkillValue += s.PilotSkill;
+            }
+            return Math.Max(0, pilotSkillValue / Ships.Count);
+        }
+
+        public virtual void RerollManagerIsPrepared() { }
+
+        public virtual void PerformTractorBeamReposition(GenericShip ship) { }
+
+        public virtual void PlaceObstacle()
+        {
+            Roster.HighlightPlayer(PlayerNo);
+        }
+
+        public virtual void PerformSystemsActivation()
+        {
+            Roster.HighlightPlayer(PlayerNo);
+        }
     }
 
 }

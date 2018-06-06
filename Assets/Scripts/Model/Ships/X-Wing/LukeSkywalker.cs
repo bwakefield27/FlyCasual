@@ -1,78 +1,121 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using Ship;
+using RuleSets;
 
 namespace Ship
 {
     namespace XWing
     {
-        public class LukeSkywalker : XWing
+        public class LukeSkywalker : XWing, ISecondEditionPilot
         {
             public LukeSkywalker() : base()
             {
                 PilotName = "Luke Skywalker";
-                ImageUrl = "https://vignette3.wikia.nocookie.net/xwing-miniatures/images/8/8c/Luke-skywalker.png";
-                IsUnique = true;
                 PilotSkill = 8;
                 Cost = 28;
+
+                IsUnique = true;
+
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Elite);
+
+                PilotAbilities.Add(new Abilities.LukeSkywalkerAbility());
             }
 
-            public override void InitializePilot()
+            public void AdaptPilotToSecondEdition()
             {
-                base.InitializePilot();
-                AfterGenerateAvailableActionEffectsList += AddLukeSkywalkerPilotAbility;
-            }
+                PilotSkill = 5;
+                MaxForce = 2;
+                ImageUrl = "https://i.imgur.com/OpwwAVr.png";
+                Cost = 60;
 
-            public void AddLukeSkywalkerPilotAbility(GenericShip ship)
+                PilotAbilities.RemoveAll(a => a is Abilities.LukeSkywalkerAbility);
+                PilotAbilities.Add(new Abilities.SecondEdition.LukeSkywalkerAbility());
+            }
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class LukeSkywalkerAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.AfterGenerateAvailableActionEffectsList += AddLukeSkywalkerPilotAbility;
+        }
+
+        public override void DeactivateAbility()
+        {
+            HostShip.AfterGenerateAvailableActionEffectsList -= AddLukeSkywalkerPilotAbility;
+        }
+
+        private void AddLukeSkywalkerPilotAbility(GenericShip ship)
+        {
+            ship.AddAvailableActionEffect(new LukeSkywalkerAction());
+        }
+
+        private class LukeSkywalkerAction : ActionsList.GenericAction
+        {
+            public LukeSkywalkerAction()
             {
-                ship.AddAvailableActionEffect(new PilotAbilities.LukeSkywalkerAction());
+                Name = EffectName = "Luke Skywalker's ability";
+
+                IsTurnsOneFocusIntoSuccess = true;
             }
 
+            public override void ActionEffect(System.Action callBack)
+            {
+                Combat.CurrentDiceRoll.ChangeOne(DieSide.Focus, DieSide.Success);
+                callBack();
+            }
+
+            public override bool IsActionEffectAvailable()
+            {
+                bool result = false;
+                if (Combat.AttackStep == CombatStep.Defence) result = true;
+                return result;
+            }
+
+            public override int GetActionEffectPriority()
+            {
+                int result = 0;
+
+                if (Combat.AttackStep == CombatStep.Defence)
+                {
+                    if (Combat.DiceRollAttack.Successes > Combat.DiceRollDefence.Successes)
+                    {
+                        if (Combat.DiceRollDefence.Focuses > 0) result = 80;
+                    }
+                }
+
+                return result;
+            }
         }
 
     }
 }
 
-namespace PilotAbilities
+namespace Abilities.SecondEdition
 {
-    public class LukeSkywalkerAction : ActionsList.GenericAction
+    //After you become the defender (before dice are rolled), you may recover 1 Force.
+    public class LukeSkywalkerAbility : GenericAbility
     {
-
-        public LukeSkywalkerAction()
+        public override void ActivateAbility()
         {
-            Name = EffectName = "Luke Skywalker's ability";
-
-            IsTurnsOneFocusIntoSuccess = true;
+            HostShip.OnDefenceStartAsDefender += RecoverForce;
         }
 
-        public override void ActionEffect(System.Action callBack)
+        public override void DeactivateAbility()
         {
-            Combat.CurentDiceRoll.ChangeOne(DieSide.Focus, DieSide.Success);
-            callBack();
+            HostShip.OnDefenceStartAsDefender -= RecoverForce;
         }
 
-        public override bool IsActionEffectAvailable()
+        private void RecoverForce()
         {
-            bool result = false;
-            if (Combat.AttackStep == CombatStep.Defence) result = true;
-            return result;
-        }
-
-        public override int GetActionEffectPriority()
-        {
-            int result = 0;
-
-            if (Combat.AttackStep == CombatStep.Defence)
+            if (HostShip.Force < HostShip.MaxForce)
             {
-                if (Combat.DiceRollAttack.Successes > Combat.DiceRollDefence.Successes)
-                {
-                    if (Combat.DiceRollDefence.Focuses > 0) result = 80;
-                }
+                HostShip.Force++;
+                Messages.ShowInfo("Luke Skywalker recovered 1 Force");
             }
-
-            return result;
         }
-
     }
 }

@@ -2,39 +2,49 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Upgrade;
+using Abilities;
+using Ship;
 
 namespace UpgradesList
 {
-
     public class LoneWolf : GenericUpgrade
     {
-
         public LoneWolf() : base()
         {
             isUnique = true;
 
-            Type = UpgradeType.Elite;
+            Types.Add(UpgradeType.Elite);
             Name = "Lone Wolf";
             Cost = 2;
-        }
 
-        public override void AttachToShip(Ship.GenericShip host)
+            UpgradeAbilities.Add(new LoneWolfAbility());
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class LoneWolfAbility : GenericAbility
+    {
+        public override void ActivateAbility()
         {
-            base.AttachToShip(host);
-
-            host.AfterGenerateAvailableActionEffectsList += LoneWolfActionEffect;
+            HostShip.AfterGenerateAvailableActionEffectsList += LoneWolfActionEffect;
         }
 
-        private void LoneWolfActionEffect(Ship.GenericShip host)
+        public override void DeactivateAbility()
+        {
+            HostShip.AfterGenerateAvailableActionEffectsList -= LoneWolfActionEffect;
+        }
+
+        private void LoneWolfActionEffect(GenericShip host)
         {
             ActionsList.GenericAction newAction = new ActionsList.LoneWolfActionEffect()
             {
-                ImageUrl = ImageUrl,
+                ImageUrl = HostUpgrade.ImageUrl,
                 Host = host
             };
             host.AddAvailableActionEffect(newAction);
         }
-
     }
 }
 
@@ -58,7 +68,7 @@ namespace ActionsList
             {
                 if (friendlyShip.Value.ShipId != Host.ShipId)
                 {
-                    Board.ShipDistanceInformation distanceInfo = new Board.ShipDistanceInformation(Host, friendlyShip.Value);
+                    BoardTools.DistanceInfo distanceInfo = new BoardTools.DistanceInfo(Host, friendlyShip.Value);
                     if (distanceInfo.Range < 3)
                     {
                         result = false;
@@ -78,13 +88,13 @@ namespace ActionsList
             {
                 if (Combat.DiceRollAttack.Successes > Combat.DiceRollDefence.Successes)
                 {
-                    if (Combat.CurentDiceRoll.BlanksNotRerolled > 0) result = 95;
+                    if (Combat.CurrentDiceRoll.BlanksNotRerolled > 0) result = 95;
                 }
             }
 
             if (Combat.AttackStep == CombatStep.Attack)
             {
-                if (Combat.CurentDiceRoll.BlanksNotRerolled > 0) result = 95;
+                if (Combat.CurrentDiceRoll.BlanksNotRerolled > 0) result = 95;
             }
 
             return result;

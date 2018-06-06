@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿using BoardTools;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,26 +13,38 @@ namespace Ship
             public Backstabber() : base()
             {
                 PilotName = "\"Backstabber\"";
-                ImageUrl = "https://vignette3.wikia.nocookie.net/xwing-miniatures/images/5/52/Backstabber.png";
-                IsUnique = true;
                 PilotSkill = 6;
                 Cost = 16;
-            }
 
-            public override void InitializePilot()
-            {
-                base.InitializePilot();
-                AfterGotNumberOfAttackDice += BackstabberPilotAbility;
-            }
+                IsUnique = true;
 
-            private void BackstabberPilotAbility(ref int diceNumber)
+                PilotAbilities.Add(new Abilities.BackstabberAbility());
+            }
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class BackstabberAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.AfterGotNumberOfAttackDice += BackstabberPilotAbility;
+        }
+
+        public override void DeactivateAbility()
+        {
+            HostShip.AfterGotNumberOfAttackDice -= BackstabberPilotAbility;
+        }
+
+        private void BackstabberPilotAbility(ref int diceNumber)
+        {
+            ShotInfo shotInformation = new ShotInfo(Combat.Defender, Combat.Attacker, Combat.ChosenWeapon);
+            if (!shotInformation.InArc)
             {
-                Board.ShipShotDistanceInformation shotInformation = new Board.ShipShotDistanceInformation(Combat.Defender, Combat.Attacker, Combat.ChosenWeapon);
-                if (!shotInformation.InArc)
-                {
-                    Messages.ShowInfo("Backstabber: Additional dice");
-                    diceNumber++;
-                }
+                Messages.ShowInfo("Backstabber: Additional dice");
+                diceNumber++;
             }
         }
     }

@@ -3,11 +3,41 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public partial class Die
-{
+{    
     public bool IsSelected { get; private set; }
-
     public bool IsRerolled { get; set; }
     public bool IsShowRerolledLock { get; private set; }
+    public bool IsUncancelable { get; set; }
+
+    private bool cannotBeModified { get; set; }
+    public bool CannotBeModified
+    {
+        get
+        {
+            return cannotBeModified;
+        }
+        set
+        {
+            cannotBeModified = value;
+            ToggleRerolledLock(IsRerolled || value); // Show the "already rerolled lock" for now. TODO: custom icon?
+        }
+    }
+
+    public bool IsSuccess
+    {
+        get
+        {
+            if (Side == DieSide.Success || Side == DieSide.Crit)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+
 
     public void ToggleSelected(bool isSelected)
     {

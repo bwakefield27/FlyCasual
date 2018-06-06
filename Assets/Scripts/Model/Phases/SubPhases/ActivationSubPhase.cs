@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using Ship;
+using GameModes;
 
 namespace SubPhases
 {
@@ -11,6 +13,8 @@ namespace SubPhases
 
         public override void Start()
         {
+            base.Start();
+
             Name = "Activation SubPhase";
         }
 
@@ -43,7 +47,7 @@ namespace SubPhases
             if (success)
             {
                 UpdateHelpInfo();
-                HighlightShips();
+                Roster.HighlightShipsFiltered(FilterShipsToPerformAttack);
                 Roster.GetPlayer(RequiredPlayer).PerformManeuver();
             }
 
@@ -104,17 +108,31 @@ namespace SubPhases
 
         public override void FinishPhase()
         {
+            if (Phases.HasOnActivationPhaseEnd)
+            {
+                GenericSubPhase subphase = Phases.StartTemporarySubPhaseNew("Notification", typeof(NotificationSubPhase), StartActivationEndSubPhase);
+                (subphase as NotificationSubPhase).TextToShow = "End of Activation ";
+                subphase.Start();
+            }
+            else
+            {
+                StartActivationEndSubPhase();
+            }
+        }
+
+        private void StartActivationEndSubPhase()
+        {
             Phases.CurrentSubPhase = new ActivationEndSubPhase();
             Phases.CurrentSubPhase.Start();
             Phases.CurrentSubPhase.Prepare();
             Phases.CurrentSubPhase.Initialize();
         }
 
-        public override bool ThisShipCanBeSelected(Ship.GenericShip ship)
+        public override bool ThisShipCanBeSelected(GenericShip ship, int mouseKeyIsPressed)
         {
             bool result = false;
 
-            if ((ship.Owner.PlayerNo == RequiredPlayer) && (ship.PilotSkill == RequiredPilotSkill))
+            if ((ship.Owner.PlayerNo == RequiredPlayer) && (ship.PilotSkill == RequiredPilotSkill) && (Roster.GetPlayer(RequiredPlayer).GetType() == typeof(Players.HumanPlayer)))
             {
                 result = true;
             }
@@ -125,7 +143,8 @@ namespace SubPhases
             return result;
         }
 
-        public override int CountActiveButtons(Ship.GenericShip ship)
+        // OUTDATED
+        public override int CountActiveButtons(GenericShip ship)
         {
             int result = 0;
             if (!Selection.ThisShip.IsManeuverPerformed)
@@ -140,17 +159,21 @@ namespace SubPhases
             return result;
         }
 
-        private void HighlightShips()
+        private bool FilterShipsToPerformAttack(GenericShip ship)
         {
-            Roster.AllShipsHighlightOff();
-            foreach (var ship in Roster.GetPlayer(RequiredPlayer).Ships)
+            return ship.PilotSkill == RequiredPilotSkill && !ship.IsManeuverPerformed && ship.Owner.PlayerNo == RequiredPlayer;
+        }
+
+        public override void DoSelectThisShip(GenericShip ship, int mouseKeyIsPressed)
+        {
+            if (!ship.IsManeuverPerformed)
             {
-                if ((ship.Value.PilotSkill == RequiredPilotSkill) && (!ship.Value.IsManeuverPerformed))
-                {
-                    ship.Value.HighlightCanBeSelectedOn();
-                    Roster.RosterPanelHighlightOn(ship.Value);
-                }
+                GameMode.CurrentGameMode.ActivateShipForMovement(Selection.ThisShip.ShipId);
             }
+            else
+            {
+                Messages.ShowErrorToHuman("This ship has already executed his maneuver");
+            };
         }
 
     }

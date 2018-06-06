@@ -11,14 +11,14 @@ namespace ActionsList
         public FocusAction() {
             Name = EffectName = "Focus";
 
-            IsSpendFocus = true;
+            TokensSpend.Add(typeof(Tokens.FocusToken));
             IsTurnsAllFocusIntoSuccess = true;
         }
 
         public override void ActionEffect(System.Action callBack)
         {
-            Combat.CurentDiceRoll.ApplyFocus();
-            Selection.ActiveShip.SpendToken(typeof(Tokens.FocusToken), callBack);
+            Combat.CurrentDiceRoll.ApplyFocus();
+            Selection.ActiveShip.Tokens.SpendToken(typeof(Tokens.FocusToken), callBack);
         }
 
         public override int GetActionEffectPriority()
@@ -27,9 +27,9 @@ namespace ActionsList
 
             if (Combat.AttackStep == CombatStep.Defence)
             {
-                int attackSuccesses = Combat.DiceRollAttack.Successes;
+                int attackSuccessesCancelable = Combat.DiceRollAttack.SuccessesCancelable;
                 int defenceSuccesses = Combat.DiceRollDefence.Successes;
-                if (attackSuccesses > defenceSuccesses)
+                if (attackSuccessesCancelable > defenceSuccesses)
                 {
                     int defenceFocuses = Combat.DiceRollDefence.Focuses;
                     if (defenceFocuses > 0)
@@ -53,12 +53,15 @@ namespace ActionsList
 
         public override void ActionTake()
         {
-            Selection.ThisShip.AssignToken(new Tokens.FocusToken(), Phases.CurrentSubPhase.CallBack);
+            Selection.ThisShip.Tokens.AssignToken(new Tokens.FocusToken(Selection.ThisShip), Phases.CurrentSubPhase.CallBack);
         }
 
         public override int GetActionPriority()
         {
             int result = 0;
+
+            if (Selection.ThisShip.UpgradeBar.HasUpgradeInstalled(typeof(UpgradesList.Expertise))) return 10;
+
             result = (Actions.HasTarget(Selection.ThisShip)) ? 50 : 20;
             return result;
         }

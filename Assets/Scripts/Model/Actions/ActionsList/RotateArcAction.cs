@@ -15,11 +15,16 @@ namespace ActionsList
 
         public override void ActionTake()
         {
-            Phases.StartTemporarySubPhase(
+            Phases.StartTemporarySubPhaseOld(
                 "Rotate Arc decision",
                 typeof(SubPhases.RotateArcDecisionSubPhase),
                 Phases.CurrentSubPhase.CallBack
             );
+        }
+
+        public override int GetActionPriority()
+        {
+            return 1;
         }
 
     }
@@ -32,16 +37,18 @@ namespace SubPhases
     public class RotateArcDecisionSubPhase : DecisionSubPhase
     {
 
-        public override void Prepare()
+        public override void PrepareDecision(System.Action callBack)
         {
-            infoText = "Rotate Arc";
+            InfoText = "Rotate Arc";
 
-            AddDecision("Front", delegate { ChangeMobileArcFacing(ArcFacing.Front); });
+            AddDecision("Front", delegate { ChangeMobileArcFacing(ArcFacing.Forward); });
             AddDecision("Left",  delegate { ChangeMobileArcFacing(ArcFacing.Left); });
             AddDecision("Right", delegate { ChangeMobileArcFacing(ArcFacing.Right); });
             AddDecision("Rear",  delegate { ChangeMobileArcFacing(ArcFacing.Rear); });
 
-            defaultDecision = GetDefaultDecision();
+            DefaultDecisionName = GetDefaultDecision();
+
+            callBack();
         }
 
         //TODO: Update for AI
@@ -53,14 +60,8 @@ namespace SubPhases
 
         private void ChangeMobileArcFacing(ArcFacing facing)
         {
-            (Selection.ThisShip.ArcInfo as ArcMobile).MobileArcFacing = facing;
+            Selection.ThisShip.ArcInfo.GetArc<ArcMobile>().RotateArc(facing);
             ConfirmDecision();
-        }
-
-        private void ConfirmDecision()
-        {
-            Phases.FinishSubPhase(this.GetType());
-            CallBack();
         }
 
     }

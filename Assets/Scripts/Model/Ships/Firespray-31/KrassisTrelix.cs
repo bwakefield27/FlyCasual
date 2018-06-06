@@ -1,6 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
+using Ship;
 
 namespace Ship
 {
@@ -11,70 +13,91 @@ namespace Ship
             public KrassisTrelix() : base()
             {
                 PilotName = "Krassis Trelix";
-                ImageUrl = "https://raw.githubusercontent.com/guidokessels/xwing-data/master/images/pilots/Galactic%20Empire/Firespray-31/krassis-trelix.png";
                 PilotSkill = 5;
                 Cost = 36;
 
+                IsUnique = true;
+
+                PilotAbilities.Add(new Abilities.KrassisTrelixAbility());
+
+                faction = Faction.Imperial;
+
                 SkinName = "Krassis Trelix";
-
-                faction = Faction.Empire;
-            }
-
-            public override void InitializePilot()
-            {
-                base.InitializePilot();
-                AfterGenerateAvailableActionEffectsList += KrassisTrelixPilotAbility;
-            }
-
-            public void KrassisTrelixPilotAbility(GenericShip ship)
-            {
-                ship.AddAvailableActionEffect(new PilotAbilities.KrassisTrelixAction());
             }
         }
     }
 }
 
-namespace PilotAbilities
+namespace Abilities
 {
-    public class KrassisTrelixAction : ActionsList.GenericAction
+    public class KrassisTrelixAbility : GenericAbility
     {
-        public KrassisTrelixAction()
+        public override void ActivateAbility()
         {
-            Name = EffectName = "Krassis Trelix's ability";
-            IsReroll = true;
+            HostShip.AfterGenerateAvailableActionEffectsList += KrassisTrelixPilotAbility;
         }
 
-        public override void ActionEffect(System.Action callBack)
+        public override void DeactivateAbility()
         {
-            DiceRerollManager diceRerollManager = new DiceRerollManager
-            {
-                NumberOfDiceCanBeRerolled = 1,
-                CallBack = callBack
-            };
-            diceRerollManager.Start();
+            HostShip.AfterGenerateAvailableActionEffectsList -= KrassisTrelixPilotAbility;
         }
 
-        public override bool IsActionEffectAvailable()
+        public void KrassisTrelixPilotAbility(GenericShip ship)
         {
-            bool result = false;
-            if (Combat.AttackStep == CombatStep.Attack && (Combat.ChosenWeapon as Upgrade.GenericSecondaryWeapon) != null)
-            {
-                result = true;
-            }
-            return result;
+            ship.AddAvailableActionEffect(new KrassisTrelixAction());
         }
 
-        public override int GetActionEffectPriority()
+        private class KrassisTrelixAction : ActionsList.GenericAction
         {
-            int result = 0;
-
-            if (Combat.AttackStep == CombatStep.Attack)
+            public KrassisTrelixAction()
             {
-                if (Combat.DiceRollAttack.Blanks > 0) result = 95;
+                Name = EffectName = "Krassis Trelix's ability";
+                IsReroll = true;
             }
 
-            return result;
-        }
+            public override void ActionEffect(System.Action callBack)
+            {
+                DiceRerollManager diceRerollManager = new DiceRerollManager
+                {
+                    NumberOfDiceCanBeRerolled = 1,
+                    CallBack = callBack
+                };
+                diceRerollManager.Start();
+            }
 
+            public override bool IsActionEffectAvailable()
+            {
+                bool result = false;
+                if (Combat.AttackStep == CombatStep.Attack && (Combat.ChosenWeapon as Upgrade.GenericSecondaryWeapon) != null)
+                {
+                    result = true;
+                }
+                return result;
+            }
+
+            public override int GetActionEffectPriority()
+            {
+                int result = 0;
+
+                if (Combat.AttackStep == CombatStep.Attack && (Combat.ChosenWeapon as Upgrade.GenericSecondaryWeapon) != null)
+                {
+                    if (Combat.DiceRollAttack.Blanks > 0)
+                    {
+                        result = 90;
+                    }
+                    else if (Combat.DiceRollAttack.Focuses > 0 && Combat.Attacker.GetAvailableActionEffectsList().Count(n => n.IsTurnsAllFocusIntoSuccess) == 0)
+                    {
+                        result = 90;
+                    }
+                    else if (Combat.DiceRollAttack.Focuses > 0)
+                    {
+                        result = 30;
+                    }
+                }
+
+                return result;
+            }
+
+        }
     }
 }

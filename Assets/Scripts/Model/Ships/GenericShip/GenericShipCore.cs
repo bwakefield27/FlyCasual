@@ -2,6 +2,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Arcs;
+using Abilities;
+using System;
+using RuleSets;
+using Tokens;
 
 namespace Ship
 {
@@ -23,14 +27,54 @@ namespace Ship
 
         public Faction faction { get; protected set; }
         public List<Faction> factions { get; protected set; }
+
+        private SubFaction? subFaction { get; set; }
+        public SubFaction SubFaction
+        {
+            get
+            {
+                if (subFaction != null)
+                {
+                    return subFaction.Value;
+                }
+                else
+                {
+                    switch (faction)
+                    {
+                        case Faction.Imperial:
+                            return SubFaction.GalacticEmpire;
+                        case Faction.Rebel:
+                            return SubFaction.RebelAlliance;
+                        case Faction.Scum:
+                            return SubFaction.ScumAndVillainy;
+                        default:
+                            throw new NotImplementedException("Invalid faction: " + faction.ToString());
+                    }
+                }
+            }
+            set
+            {
+                subFaction = value;
+            }
+        }
         
         public string PilotName { get; protected set; }
+        public string PilotNameShort { get; protected set; }
         public bool IsUnique { get; protected set; }
 
         public int Firepower { get; protected set; }
-        public int Hull { get; protected set; }
+
+        public int Hull
+        {
+            get { return Mathf.Max(0, MaxHull - Damage.CountAssignedDamage()); }
+        }
+
+
         public int Shields { get; protected set; }
         public int Cost { get; protected set; }
+
+        public int TargetLockMinRange { get; protected set; }
+        public int TargetLockMaxRange { get; protected set; }
 
         private int maxHull;
         public int MaxHull
@@ -53,14 +97,54 @@ namespace Ship
             get
             {
                 int result = maxShields;
-                if (AfterGetMaxShields != null) AfterGetMaxShields(ref result);
                 return Mathf.Max(result, 0);
             }
-            protected set
+            set
             {
                 maxShields = Mathf.Max(value, 0);
             }
         }
+
+        private int maxEnergy;
+        public int MaxEnergy
+        {
+            get
+            {
+                int result = maxEnergy;
+                return Mathf.Max(result, 0);
+            }
+            set
+            {
+                maxEnergy = Mathf.Max(value, 0);
+            }
+        }
+
+        public int Energy
+        {
+            get
+            {
+                return Tokens.CountTokensByType(typeof(Tokens.EnergyToken));
+            }
+        }
+
+        public int Force
+        {
+            get
+            {
+                return this.Tokens.CountTokensByType<ForceToken>();
+            }
+
+            set
+            {
+                this.Tokens.RemoveAllTokensByType(typeof(ForceToken), delegate { });
+                for (int i = 0; i < value; i++)
+                {
+                    this.Tokens.AssignCondition(new ForceToken(this));
+                }
+            }
+        }
+
+        public int MaxForce { get; protected set; }
 
         protected List<IModifyPilotSkill> PilotSkillModifiers;
 
@@ -70,7 +154,13 @@ namespace Ship
             get
             {
                 int result = pilotSkill;
-                if (PilotSkillModifiers.Count > 0) PilotSkillModifiers[0].ModifyPilotSkill(ref result);
+                if (PilotSkillModifiers.Count > 0)
+                {
+                    for (int i = PilotSkillModifiers.Count-1; i >= 0; i--)
+                    {
+                        PilotSkillModifiers[i].ModifyPilotSkill(ref result);
+                    }
+                }
                 
                 result = Mathf.Clamp(result, 0, 12);
                 return result;
@@ -100,13 +190,11 @@ namespace Ship
             get
             {
                 int result = agility;
-                if (AfterGetAgility != null) AfterGetAgility(ref result);
                 result = Mathf.Max(result, 0);
                 return result;
             }
             protected set
             {
-                value = Mathf.Max(value, 0);
                 agility = value;
             }
         }
@@ -117,28 +205,63 @@ namespace Ship
         public BaseSize ShipBaseSize { get; protected set; }
         public GenericShipBase ShipBase { get; protected set; }
 
-        public BaseArcsType ShipBaseArcsType { get; protected set; }
-        public GenericArc ArcInfo { get; protected set; }
+        public BaseArcsType ShipBaseArcsType { get; set; }
+        public ArcsHolder ArcInfo { get; protected set; }
 
         public Upgrade.ShipUpgradeBar UpgradeBar { get; protected set; }
         public List<Upgrade.UpgradeType> PrintedUpgradeIcons { get; protected set; }
 
+        public TokensManager Tokens { get; protected set; }
+
+        private string pilotNameCanonical;
+        public string PilotNameCanonical
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(pilotNameCanonical)) return pilotNameCanonical;
+
+                return Tools.Canonicalize(PilotName);
+            }
+            set { pilotNameCanonical = value; }
+        }
+
+        private string shipTypeCanonical;
+        public string ShipTypeCanonical
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(shipTypeCanonical)) return shipTypeCanonical;
+
+                return Tools.Canonicalize(Type);
+            }
+            set { shipTypeCanonical = value; }
+        }
+
+        public List<GenericAbility> PilotAbilities = new List<GenericAbility>();
+
         public GenericShip()
         {
+            IconicPilots = new Dictionary<Faction, Type>();
+            RequiredMods = new List<Type>();
             factions = new List<Faction>();
             SoundFlyPaths = new List<string> ();
-            Maneuvers = new Dictionary<string, Movement.ManeuverColor>();
+            Maneuvers = new Dictionary<string, Movement.MovementComplexity>();
             UpgradeBar = new Upgrade.ShipUpgradeBar(this);
+            Tokens = new TokensManager(this);
             PrintedUpgradeIcons = new List<Upgrade.UpgradeType>();
             PilotSkillModifiers = new List<IModifyPilotSkill>();
+
+            PrintedActions = new List<ActionsList.GenericAction>();
+            PrintedActions.Add(new ActionsList.FocusAction());
+
+            TargetLockMinRange = 1;
+            TargetLockMaxRange = 3;
         }
 
         public void InitializeGenericShip(Players.PlayerNo playerNo, int shipId, Vector3 position)
         {
             Owner = Roster.GetPlayer(playerNo);
             ShipId = shipId;
-
-            AddBuiltInActions();
 
             StartingPosition = position;
 
@@ -163,54 +286,45 @@ namespace Ship
             InitializePilotForSquadBuilder();
 
             Shields = MaxShields;
-            Hull = MaxHull;
 
             PrimaryWeapon = new PrimaryWeaponClass(this);
+            Damage = new AssignedDamageCards(this);
 
             CreateModel(StartingPosition);
-            InitializeShipBase();
             InitializeShipBaseArc();
 
             SetTagOfChildrenRecursive(Model.transform, "ShipId:" + ShipId.ToString());
         }
 
-        private void InitializeShipBase()
+        public void InitializeShipBaseArc()
         {
-            switch (ShipBaseSize)
-            {
-                case BaseSize.Small:
-                    ShipBase = new ShipBaseSmall(this);
-                    break;
-                case BaseSize.Large:
-                    ShipBase = new ShipBaseLarge(this);
-                    break;
-                default:
-                    break;
-            }
-        }
+            ArcInfo = new ArcsHolder(this);
 
-        private void InitializeShipBaseArc()
-        {
             switch (ShipBaseArcsType)
             {
-                case BaseArcsType.ArcDefault:
-                    ArcInfo = new GenericArc(this);
-                    break;
                 case BaseArcsType.ArcRear:
-                    ArcInfo = new ArcRear(this);
+                    ArcInfo.Arcs.Add(new ArcRear(ShipBase));
                     break;
-                case BaseArcsType.Arc180:
-                    ArcInfo = new Arc180(this);
+                case BaseArcsType.ArcSpecial180:
+                    ArcInfo.Arcs.Add(new ArcSpecial180(ShipBase));
                     break;
                 case BaseArcsType.Arc360:
-                    ArcInfo = new Arc360(this);
+                    ArcInfo.GetArc<OutOfArc>().ShotPermissions.CanShootPrimaryWeapon = true;
                     break;
                 case BaseArcsType.ArcMobile:
-                    ArcInfo = new ArcMobile(this);
+                    ArcInfo.Arcs.Add(new ArcMobile(ShipBase));
+                    break;
+                case BaseArcsType.ArcBullseye:
+                    ArcInfo.Arcs.Add(new ArcBullseye(ShipBase));
+                    break;
+                case BaseArcsType.ArcSpecialGhost:
+                    ArcInfo.Arcs.Add(new ArcSpecialGhost(ShipBase));
                     break;
                 default:
                     break;
             }
+
+            RuleSet.Instance.AdaptArcsToRules(this);
         }
 
         public void InitializePilotForSquadBuilder()
@@ -220,8 +334,30 @@ namespace Ship
 
         public virtual void InitializePilot()
         {
+            PrepareForceInitialization();
+
             SetShipInsertImage();
             SetShipSkin();
+            InitializePilotAbilities();
+        }
+
+        private void PrepareForceInitialization()
+        {
+            OnGameStart += InitializeForce;
+        }
+
+        private void InitializeForce()
+        {
+            OnGameStart -= InitializeForce;
+            Force = MaxForce;
+        }
+
+        private void InitializePilotAbilities()
+        {
+            foreach (var pilotAbility in PilotAbilities)
+            {
+                pilotAbility.Initialize(this);
+            }
         }
 
         private void InitializeSlots()
@@ -242,13 +378,13 @@ namespace Ship
 
         public void ChangeAgilityBy(int value)
         {
-            Agility += value;
+            agility += value;
             if (AfterStatsAreChanged != null) AfterStatsAreChanged(this);
         }
 
-        public void ChangeHullBy(int value)
+        public void ChangeMaxHullBy(int value)
         {
-            Hull += value;
+            MaxHull += value;
             if (AfterStatsAreChanged != null) AfterStatsAreChanged(this);
         }
 
@@ -256,6 +392,12 @@ namespace Ship
         {
             Shields += value;
             if (AfterStatsAreChanged != null) AfterStatsAreChanged(this);
+        }
+
+        public void SetTargetLockRange(int min, int max)
+        {
+            TargetLockMinRange = min;
+            TargetLockMaxRange = max;
         }
 
     }

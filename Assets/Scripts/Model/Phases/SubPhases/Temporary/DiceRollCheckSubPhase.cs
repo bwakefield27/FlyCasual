@@ -20,6 +20,8 @@ namespace SubPhases
 
         public override void Start()
         {
+            base.Start();
+
             IsTemporary = true;
             finishAction = FinishAction;
             checkResults = CheckResults;
@@ -36,30 +38,56 @@ namespace SubPhases
 
             DiceRoll DiceRollCheck;
             DiceRollCheck = new DiceRoll(diceType, diceCount, DiceRollCheckType.Check);
-            DiceRollCheck.Roll(checkResults);
+            DiceRollCheck.Roll(SyncDiceResults);
         }
 
-        public void ShowConfirmDiceResultsButton()
+        private void SyncDiceResults(DiceRoll diceroll)
         {
-            // BUG after koiogran asteroid?
-            if (Roster.GetPlayer(Selection.ActiveShip.Owner.PlayerNo).GetType() == typeof(Players.HumanPlayer))
+            if (!Network.IsNetworkGame)
             {
-                Button closeButton = GameObject.Find("UI").transform.Find("CheckDiceResultsPanel").Find("DiceModificationsPanel").Find("Confirm").GetComponent<Button>();
-                closeButton.onClick.RemoveAllListeners();
-                closeButton.onClick.AddListener(finishAction);
-
-                closeButton.gameObject.SetActive(true);
+                checkResults(diceroll);
             }
             else
             {
-                finishAction.Invoke();
+                Network.SyncDiceResults();
             }
+        }
+
+        public void PrepareConfirmation()
+        {
+            Roster.GetPlayer(Selection.ActiveShip.Owner.PlayerNo).ConfirmDiceCheck();
+        }
+
+        public void ShowConfirmButton()
+        {
+            if (!Network.IsNetworkGame)
+            {
+                ShowDiceRollCheckConfirmButton();
+            }
+            else
+            {
+                Network.ConfirmDiceRollCheckResults();
+            }
+        }
+
+        public void ShowDiceRollCheckConfirmButton()
+        {
+            Button closeButton = GameObject.Find("UI").transform.Find("CheckDiceResultsPanel").Find("DiceModificationsPanel").Find("Confirm").GetComponent<Button>();
+            closeButton.onClick.RemoveAllListeners();
+            closeButton.onClick.AddListener(PressConfirmButton);
+
+            closeButton.gameObject.SetActive(true);
+        }
+
+        public void CalculateDice()
+        {
+            CheckResults(DiceRoll.CurrentDiceRoll);
         }
 
         protected virtual void CheckResults(DiceRoll diceRoll)
         {
             CurrentDiceRoll = diceRoll;
-            ShowConfirmDiceResultsButton();
+            PrepareConfirmation();
         }
 
         protected virtual void FinishAction()
@@ -71,19 +99,12 @@ namespace SubPhases
         public void HideDiceResultMenu()
         {
             GameObject.Find("UI").transform.Find("CheckDiceResultsPanel").gameObject.SetActive(false);
-            HideDiceModificationButtons();
+            HideConfirmDiceButton();
             CurrentDiceRoll.RemoveDiceModels();
         }
 
-        public void HideDiceModificationButtons()
+        public void HideConfirmDiceButton()
         {
-            foreach (Transform button in GameObject.Find("UI").transform.Find("CheckDiceResultsPanel").Find("DiceModificationsPanel"))
-            {
-                if (button.name.StartsWith("Button"))
-                {
-                    MonoBehaviour.Destroy(button.gameObject);
-                }
-            }
             GameObject.Find("UI").transform.Find("CheckDiceResultsPanel").Find("DiceModificationsPanel").Find("Confirm").gameObject.SetActive(false);
         }
 
@@ -93,16 +114,34 @@ namespace SubPhases
             UpdateHelpInfo();
         }
 
-        public override bool ThisShipCanBeSelected(Ship.GenericShip ship)
+        public override bool ThisShipCanBeSelected(Ship.GenericShip ship, int mouseKeyIsPressed)
         {
             bool result = false;
             return result;
         }
 
-        public override bool AnotherShipCanBeSelected(Ship.GenericShip anotherShip)
+        public override bool AnotherShipCanBeSelected(Ship.GenericShip anotherShip, int mouseKeyIsPressed)
         {
             bool result = false;
             return result;
+        }
+
+        private void PressConfirmButton()
+        {
+            HideConfirmDiceButton();
+            if (!Network.IsNetworkGame)
+            {
+                Confirm();
+            }
+            else
+            {
+                Network.FinishTask();
+            }
+        }
+
+        public void Confirm()
+        {
+            finishAction.Invoke();
         }
 
     }

@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using GameModes;
+using RuleSets;
 
 namespace Movement
 {
@@ -21,7 +23,8 @@ namespace Movement
     {
         Left,
         Forward,
-        Right
+        Right,
+        Stationary
     }
 
     public enum ManeuverBearing
@@ -36,12 +39,12 @@ namespace Movement
         Reverse
     }
 
-    public enum ManeuverColor
+    public enum MovementComplexity
     {
         None,
-        Green,
-        White,
-        Red
+        Easy,
+        Normal,
+        Complex
     }
 
     public struct MovementStruct
@@ -49,9 +52,11 @@ namespace Movement
         public ManeuverSpeed Speed;
         public ManeuverDirection Direction;
         public ManeuverBearing Bearing;
-        public ManeuverColor ColorComplexity;
+        public MovementComplexity ColorComplexity;
 
-        public MovementStruct(string parameters)
+        private string shipTag;
+
+        public MovementStruct(string parameters, Ship.GenericShip ship = null)
         {
             string[] arrParameters = parameters.Split('.');
 
@@ -92,6 +97,9 @@ namespace Movement
                 case "R":
                     direction = ManeuverDirection.Right;
                     break;
+                case "S":
+                    direction = ManeuverDirection.Stationary;
+                    break;
             }
 
             ManeuverBearing bearing = ManeuverBearing.Straight;
@@ -119,11 +127,31 @@ namespace Movement
             Direction = direction;
             Bearing = bearing;
 
-            if (!Selection.ThisShip.Maneuvers.ContainsKey(parameters)) Debug.Log("ERROR: Ship doesn't have required maneuver. Seems that AI maneuver table is wrong.");
+            ship = ship ?? Selection.ThisShip;
+            shipTag = ship.GetTag();
 
-            ColorComplexity = Selection.ThisShip.Maneuvers[parameters];
+            if (!ship.Maneuvers.ContainsKey(parameters))
+            {
+                Console.Write("<b>Ship " + ship.Type + " doesn't have maneuver " + parameters + "</b>", LogTypes.Errors, true, "red");
+            }
+            ColorComplexity = ship.Maneuvers[parameters];
+            ColorComplexity = ship.GetColorComplexityOfManeuver(this);
+        }
 
-            ColorComplexity = Selection.ThisShip.GetColorComplexityOfManeuver(this);
+        public void UpdateColorComplexity()
+        {
+            string parameters = this.ToString();
+
+            Ship.GenericShip ship = Roster.GetShipById(shipTag) ?? Selection.ThisShip;
+            if (!ship.Maneuvers.ContainsKey(parameters))
+            {
+                Console.Write(ship.Type + " doesn't have " + parameters + " maneuver!", LogTypes.Errors, true, "red");
+            }
+            else
+            {
+                ColorComplexity = ship.Maneuvers[parameters];
+                ColorComplexity = ship.GetColorComplexityOfManeuver(this);
+            }
         }
 
         public int SpeedInt
@@ -206,6 +234,9 @@ namespace Movement
                 case ManeuverDirection.Right:
                     maneuverString += "R.";
                     break;
+                case ManeuverDirection.Stationary:
+                    maneuverString += "S.";
+                    break;
                 default:
                     break;
             }
@@ -243,11 +274,25 @@ namespace Movement
 
     public abstract class GenericMovement
     {
+        public bool IsRevealDial = true;
+        public bool IsIonManeuver;
+
         public ManeuverSpeed ManeuverSpeed { get; set; }
         public int Speed { get; set; }
         public ManeuverDirection Direction { get; set; }
         public ManeuverBearing Bearing { get; set; }
-        public ManeuverColor ColorComplexity { get; set; }
+        public MovementComplexity ColorComplexity { get; set; }
+
+        private Ship.GenericShip theShip;
+        public Ship.GenericShip TheShip {
+            get {
+                return theShip ?? Selection.ThisShip;
+            }
+            set {
+                theShip = value;
+            }
+        }
+
 
         protected float ProgressTarget { get; set; }
         protected float ProgressCurrent { get; set; }
@@ -256,7 +301,7 @@ namespace Movement
 
         public MovementPrediction movementPrediction;
 
-        public GenericMovement(int speed, ManeuverDirection direction, ManeuverBearing bearing, ManeuverColor color)
+        public GenericMovement(int speed, ManeuverDirection direction, ManeuverBearing bearing, MovementComplexity color)
         {
             Speed = speed;
             ManeuverSpeed = GetManeuverSpeed(speed);
@@ -311,43 +356,49 @@ namespace Movement
 
         public virtual void LaunchShipMovement()
         {
-            Selection.ThisShip.StartMoving(LaunchShipMovementContinue);
+            GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
+            Game.Wait(0.5f, delegate { TheShip.StartMoving(LaunchShipMovementContinue); });
         }
 
         private void LaunchShipMovementContinue()
         {
-            Selection.ThisShip.ShipsBumped.AddRange(movementPrediction.ShipsBumped);
-            foreach (var bumpedShip in Selection.ThisShip.ShipsBumped)
+            if (ProgressTarget > 0) Rules.Collision.ClearBumps(TheShip);
+
+            foreach (var shipBumped in movementPrediction.ShipsBumped)
             {
-                if (!bumpedShip.ShipsBumped.Contains(Selection.ThisShip))
-                {
-                    bumpedShip.ShipsBumped.Add(Selection.ThisShip);
-                }
+                Rules.Collision.AddBump(TheShip, shipBumped);
             }
 
-            Selection.ThisShip.IsLandedOnObstacle = movementPrediction.IsLandedOnAsteroid;
+            TheShip.IsLandedOnObstacle = movementPrediction.IsLandedOnAsteroid;
 
             if (movementPrediction.AsteroidsHit.Count > 0)
             {
-                Selection.ThisShip.ObstaclesHit.AddRange(movementPrediction.AsteroidsHit);
+                TheShip.ObstaclesHit.AddRange(movementPrediction.AsteroidsHit);
             }
 
             if (movementPrediction.MinesHit.Count > 0)
             {
-                Selection.ThisShip.MinesHit.AddRange(movementPrediction.MinesHit);
+                TheShip.MinesHit.AddRange(movementPrediction.MinesHit);
             }
 
-            Sounds.PlayFly();
+            Sounds.PlayFly(TheShip);
             AdaptSuccessProgress();
 
             LaunchSimple();
         }
 
-        public virtual void LaunchSimple()
+        public void LaunchSimple()
         {
             //TEMP
-            GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
-            Game.Movement.isMoving = true;
+            if (ProgressTarget > 0)
+            {
+                GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
+                Game.Movement.isMoving = true;
+            }
+            else
+            {
+                FinishMovement();
+            }
         }
 
         public virtual void UpdateMovementExecution()
@@ -371,9 +422,20 @@ namespace Movement
             GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
             Game.Movement.isMoving = false;
 
-            Selection.ThisShip.ResetRotationHelpers();
+            TheShip.ApplyRotationHelpers();
+            TheShip.ResetRotationHelpers();
 
-            ManeuverEndRotation(FinishMovementEvents);
+            // TODO: Use Selection.ActiveShip instead of TheShip
+            Selection.ActiveShip = TheShip;
+
+            ManeuverEndRotation(FinishManeuverExecution);
+        }
+
+        private void FinishManeuverExecution()
+        {
+            MovementTemplates.HideLastMovementRuler();
+
+            Selection.ActiveShip.CallExecuteMoving(GameMode.CurrentGameMode.FinishMovementExecution);
         }
 
         protected virtual void ManeuverEndRotation(Action callBack)
@@ -381,22 +443,10 @@ namespace Movement
             callBack();
         }
 
-        protected virtual void FinishMovementEvents()
-        { 
-            MovementTemplates.HideLastMovementRuler();
-
-            Selection.ThisShip.CallExecuteMoving();
-
-            //Called as callbacks
-            //Selection.ThisShip.FinishMovement();
-            //Selection.ThisShip.FinishPosition();
-            //Phases.FinishSubPhase(typeof(SubPhases.MovementExecutionSubPhase));
-        }
-
         //TODO: Rework
         protected float GetMovement1()
         {
-            float result = Board.BoardManager.GetBoard().TransformVector(new Vector3(4, 0, 0)).x;
+            float result = BoardTools.Board.GetBoard().TransformVector(new Vector3(4, 0, 0)).x;
             return result;
         }
 
@@ -418,6 +468,9 @@ namespace Movement
                     break;
                 case ManeuverDirection.Right:
                     maneuverString += "R.";
+                    break;
+                case ManeuverDirection.Stationary:
+                    maneuverString += "S.";
                     break;
                 default:
                     break;
@@ -506,20 +559,73 @@ namespace Movement
             Color result = Color.yellow;
             switch (ColorComplexity)
             {
-                case ManeuverColor.None:
+                case MovementComplexity.None:
                     break;
-                case ManeuverColor.Green:
-                    result = Color.green;
+                case MovementComplexity.Easy:
+                    result = RuleSet.Instance.MovementEasyColor;
                     break;
-                case ManeuverColor.White:
+                case MovementComplexity.Normal:
                     result = Color.white;
                     break;
-                case ManeuverColor.Red:
+                case MovementComplexity.Complex:
                     result = Color.red;
                     break;
                 default:
                     break;
             }
+            return result;
+        }
+
+        public static List<string> GetAllManeuvers()
+        {
+            List<string> result = new List<string>();
+
+            result.Add("0.S.S");
+
+            result.Add("1.L.T");
+            result.Add("2.L.T");
+            result.Add("3.L.T");
+
+            result.Add("1.L.B");
+            result.Add("2.L.B");
+            result.Add("3.L.B");
+
+            result.Add("1.F.S");
+            result.Add("2.F.S");
+            result.Add("3.F.S");
+            result.Add("4.F.S");
+            result.Add("5.F.S");
+
+            result.Add("1.R.B");
+            result.Add("2.R.B");
+            result.Add("3.R.B");
+
+            result.Add("1.R.T");
+            result.Add("2.R.T");
+            result.Add("3.R.T");
+
+            result.Add("1.L.R");
+            result.Add("2.L.R");
+            result.Add("3.L.R");
+
+            result.Add("1.L.E");
+            result.Add("2.L.E");
+            result.Add("3.L.E");
+
+            result.Add("1.F.R");
+            result.Add("2.F.R");
+            result.Add("3.F.R");
+            result.Add("4.F.R");
+            result.Add("5.F.R");
+
+            result.Add("1.R.E");
+            result.Add("2.R.E");
+            result.Add("3.R.E");
+
+            result.Add("1.R.R");
+            result.Add("2.R.R");
+            result.Add("3.R.R");
+
             return result;
         }
 

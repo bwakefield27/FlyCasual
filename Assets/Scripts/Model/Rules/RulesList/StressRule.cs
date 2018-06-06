@@ -1,12 +1,19 @@
 ﻿using UnityEngine;
+using Ship;
+using Tokens;
+using ActionsList;
+using Players;
+using Movement;
 
 namespace RulesList
 {
     public class StressRule
     {
 
-        public void PlanCheckStress(Ship.GenericShip ship)
+        public void PlanCheckStress(GenericShip ship)
         {
+            if (BoardTools.Board.IsOffTheBoard(ship)) return;
+
             Triggers.RegisterTrigger(new Trigger()
             {
                 Name = "Check stress",
@@ -14,17 +21,24 @@ namespace RulesList
                 TriggerType = TriggerTypes.OnShipMovementExecuted,
                 EventHandler = CheckStress
             });
+
+            if (ship.Owner.GetType() == typeof(HotacAiPlayer))
+            {
+                ship.AfterGenerateAvailableActionsList += AddRemoveStressActionForHotacAI;
+            }
         }
 
-        private static void CheckStress(object sender, System.EventArgs e)
+        public static void CheckStress(object sender, System.EventArgs e)
         {
             switch (Selection.ThisShip.GetLastManeuverColor())
             {
-                case Movement.ManeuverColor.Red:
-                    if (Selection.ThisShip.Owner.GetType() != typeof(Players.HotacAiPlayer))
+                case MovementComplexity.Complex:
+                    if (Selection.ThisShip.Owner.GetType() != typeof(HotacAiPlayer))
                     {
-                        Selection.ThisShip.IsSkipsActionSubPhase = !Selection.ThisShip.CanPerformActionsWhileStressed;
-                        Selection.ThisShip.AssignToken(new Tokens.StressToken(), Triggers.FinishTrigger);
+                        Selection.ThisShip.Tokens.AssignToken(new StressToken(Selection.ThisShip), delegate {
+                            Selection.ThisShip.IsSkipsActionSubPhase = Selection.ThisShip.Tokens.HasToken(typeof(StressToken)) && !Selection.ThisShip.CanPerformActionsWhileStressed;
+                            Triggers.FinishTrigger();
+                        });
                     }
                     else
                     {
@@ -32,12 +46,18 @@ namespace RulesList
                         Triggers.FinishTrigger();
                     }
                     break;
-                case Movement.ManeuverColor.Green:
-                    if (Selection.ThisShip.Owner.GetType() != typeof(Players.HotacAiPlayer))
+                case MovementComplexity.Easy:
+                    if (Selection.ThisShip.Owner.GetType() != typeof(HotacAiPlayer))
                     {
-                        Selection.ThisShip.RemoveToken(typeof(Tokens.StressToken));
+                        Selection.ThisShip.Tokens.RemoveToken(
+                            typeof(StressToken),
+                            Triggers.FinishTrigger
+                        );
                     }
-                    Triggers.FinishTrigger();
+                    else
+                    {
+                        Triggers.FinishTrigger();
+                    }
                     break;
                 default:
                     Triggers.FinishTrigger();
@@ -45,22 +65,62 @@ namespace RulesList
             }
         }
 
-        public void CanPerformActions(ActionsList.GenericAction action, ref bool result)
+        public void CanPerformActions(GenericAction action, ref bool result)
         {
-            if (Selection.ThisShip.GetToken(typeof(Tokens.StressToken)) != null)
+            if (Selection.ThisShip.Tokens.GetToken(typeof(StressToken)) != null)
             {
-                result = Selection.ThisShip.CanPerformActionsWhileStressed;
+                result = Selection.ThisShip.CanPerformActionsWhileStressed || action.CanBePerformedWhileStressed;
             }
         }
 
-        public void CannotPerformRedManeuversWhileStressed(Ship.GenericShip ship, ref Movement.MovementStruct movement)
+        public void CannotPerformRedManeuversWhileStressed(GenericShip ship, ref MovementStruct movement)
         {
-            //TODO: Should I show red maneuvers if I have stress?
-            if ((movement.ColorComplexity == Movement.ManeuverColor.Red) && (ship.GetToken(typeof(Tokens.StressToken)) != null))
+            if ((movement.ColorComplexity == MovementComplexity.Complex) && (ship.Tokens.GetToken(typeof(StressToken)) != null))
             {
-                movement.ColorComplexity = Movement.ManeuverColor.None;
+                if (!ship.CanPerformRedManeuversWhileStressed && !DirectionsMenu.IsForcedToShowRedManeuvers)
+                {
+                    movement.ColorComplexity = MovementComplexity.None;
+                }
             }
+        }
+
+        private void AddRemoveStressActionForHotacAI(GenericShip host)
+        {
+            host.AddAvailableAction(new HotacRemoveStressAction() { Host = host });
         }
 
     }
 }
+
+namespace ActionsList
+{
+
+    public class HotacRemoveStressAction : GenericAction
+    {
+
+        public HotacRemoveStressAction()
+        {
+            Name = EffectName = "Remove Stress";
+
+            CanBePerformedWhileStressed = true;
+        }
+
+        public override void ActionTake()
+        {
+            Host.Tokens.RemoveToken(
+                typeof(StressToken),
+                Phases.CurrentSubPhase.CallBack
+            );
+        }
+
+        public override int GetActionPriority()
+        {
+            int result = 0;
+            if (Host.Tokens.HasToken(typeof(StressToken))) result = int.MaxValue;
+            return result;
+        }
+
+    }
+
+}
+

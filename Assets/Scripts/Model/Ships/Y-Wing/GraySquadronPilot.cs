@@ -1,25 +1,39 @@
-﻿using System.Collections;
+﻿using RuleSets;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Upgrade;
 
 namespace Ship
 {
     namespace YWing
     {
-        public class GraySquadronPilot : YWing
+        public class GraySquadronPilot : YWing, ISecondEditionPilot
         {
             public GraySquadronPilot() : base()
             {
                 PilotName = "Gray Squadron Pilot";
-                ImageUrl = "https://vignette3.wikia.nocookie.net/xwing-miniatures/images/c/ca/Grey_Squadron_Pilot.jpg";
                 PilotSkill = 4;
                 Cost = 20;
 
-                PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Astromech);
+                PrintedUpgradeIcons.Add(UpgradeType.Astromech);
 
                 SkinName = "Gray";
 
-                faction = Faction.Rebels;
+                faction = Faction.Rebel;
+            }
+
+            public void AdaptPilotToSecondEdition()
+            {
+                PilotName = "Gray Squadron Bomber";
+                PilotNameShort = "Gray Sq. Bomber";
+                PilotSkill = 2;
+
+                ImageUrl = "https://i.imgur.com/1tN3KEx.png";
+
+                PrintedUpgradeIcons.Add(UpgradeType.Elite);
+
+                Cost = 40;
             }
         }
     }

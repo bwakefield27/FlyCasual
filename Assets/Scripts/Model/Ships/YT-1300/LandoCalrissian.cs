@@ -1,6 +1,10 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Ship;
+using SubPhases;
+using System;
+using System.Linq;
 
 namespace Ship
 {
@@ -11,7 +15,6 @@ namespace Ship
             public LandoCalrissian() : base()
             {
                 PilotName = "Lando Calrissian";
-                ImageUrl = "https://raw.githubusercontent.com/guidokessels/xwing-data/master/images/pilots/Rebel%20Alliance/YT-1300/lando-calrissian.png";
                 PilotSkill = 7;
                 Cost = 44;
 
@@ -23,102 +26,93 @@ namespace Ship
 
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Missile);
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Elite);
-            }
 
-            public override void InitializePilot()
-            {
-                base.InitializePilot();
-                OnMovementExecuted += CheckLandoCalrissianPilotAbility;
-            }
-
-            public void CheckLandoCalrissianPilotAbility(GenericShip ship)
-            {
-                if (ship.AssignedManeuver.ColorComplexity == Movement.ManeuverColor.Green)
-                {
-                    Triggers.RegisterTrigger(new Trigger()
-                    {
-                        Name = "Lando Calrissian's ability",
-                        TriggerOwner = ship.Owner.PlayerNo,
-                        TriggerType = TriggerTypes.OnShipMovementExecuted,
-                        EventHandler = LandoCalrissianPilotAbility
-                    });
-                }
-            }
-
-            private void LandoCalrissianPilotAbility(object sender, System.EventArgs e)
-            {
-                Phases.StartTemporarySubPhase(
-                    "Select target for Lando Calrissian's ability",
-                    typeof(SubPhases.SelectLandoCalrissianPilotAbilityTargetSubPhase),
-                    Triggers.FinishTrigger
-                );
+                PilotAbilities.Add(new Abilities.LandoCalrissianAbility());
             }
         }
     }
 }
 
-namespace SubPhases
+namespace Abilities
 {
-
-    public class SelectLandoCalrissianPilotAbilityTargetSubPhase : SelectShipSubPhase
+    public class LandoCalrissianAbility : GenericAbility
     {
-        private Ship.GenericShip originalShip;
-
-        public override void Prepare()
+        public override void ActivateAbility()
         {
-            isFriendlyAllowed = true;
-            maxRange = 1;
-            finishAction = SelectLandoCalrissianPilotAbilityTarget;
-
-            originalShip = Selection.ThisShip;
-
-            UI.ShowSkipButton();
+            HostShip.OnMovementExecuted += CheckLandoCalrissianPilotAbility;
         }
 
-        private void SelectLandoCalrissianPilotAbilityTarget()
+        public override void DeactivateAbility()
+        {
+            HostShip.OnMovementExecuted -= CheckLandoCalrissianPilotAbility;
+        }
+
+        private void CheckLandoCalrissianPilotAbility(GenericShip ship)
+        {
+            if (BoardTools.Board.IsOffTheBoard(ship)) return;
+
+            if (ship.AssignedManeuver.ColorComplexity == Movement.MovementComplexity.Easy)
+            {
+                RegisterAbilityTrigger(TriggerTypes.OnShipMovementExecuted, LandoCalrissianPilotAbility);
+            }
+        }
+
+        private void LandoCalrissianPilotAbility(object sender, System.EventArgs e)
+        {
+            SelectTargetForAbility(
+                GrantFreeAction,
+                FilterAbilityTargets,
+                GetAiAbilityPriority,
+                HostShip.Owner.PlayerNo,
+                true,
+                null,
+                HostShip.PilotName,
+                "Choose another ship.\nIt may perform free action shown in its action bar.",
+                HostShip.ImageUrl
+            );
+        }
+
+        private bool FilterAbilityTargets(GenericShip ship)
+        {
+            return FilterByTargetType(ship, new List<TargetTypes>() { TargetTypes.OtherFriendly }) && FilterTargetsByRange(ship, 1, 1);
+        }
+
+        private int GetAiAbilityPriority(GenericShip ship)
+        {
+            int result = 0;
+
+            result += NeedTokenPriority(ship);
+            result += ship.Cost + ship.UpgradeBar.GetUpgradesOnlyFaceup().Sum(n => n.Cost);
+
+            return result;
+        }
+
+        private int NeedTokenPriority(GenericShip ship)
+        {
+            if (!ship.Tokens.HasToken(typeof(Tokens.FocusToken))) return 100;
+            if (ship.PrintedActions.Any(n => n.GetType() == typeof(ActionsList.EvadeAction)) && !ship.Tokens.HasToken(typeof(Tokens.EvadeToken))) return 50;
+            if (ship.PrintedActions.Any(n => n.GetType() == typeof(ActionsList.TargetLockAction)) && !ship.Tokens.HasToken(typeof(Tokens.BlueTargetLockToken), '*')) return 50;
+            return 0;
+        }
+
+        private void GrantFreeAction()
         {
             Selection.ThisShip = TargetShip;
 
-            Triggers.RegisterTrigger(
-                new Trigger()
-                {
-                    Name = "Lando Calrissian's ability: Free action",
-                    TriggerOwner = Selection.ThisShip.Owner.PlayerNo,
-                    TriggerType = TriggerTypes.OnFreeActionPlanned,
-                    EventHandler = PerformFreeAction
-                }
-            );
+            RegisterAbilityTrigger(TriggerTypes.OnFreeActionPlanned, PerformFreeAction);
 
-            MovementTemplates.ReturnRangeRuler();
-
-            Triggers.ResolveTriggers(TriggerTypes.OnFreeActionPlanned, delegate {
-                Phases.FinishSubPhase(typeof(SelectLandoCalrissianPilotAbilityTargetSubPhase));
-                Triggers.FinishTrigger();
-            });
+            Triggers.ResolveTriggers(TriggerTypes.OnFreeActionPlanned, SelectShipSubPhase.FinishSelection);
         }
-
-        protected override void RevertSubPhase() { }
 
         private void PerformFreeAction(object sender, System.EventArgs e)
         {
-            List<ActionsList.GenericAction> actions = Selection.ThisShip.GetAvailablePrintedActionsList();
-
             TargetShip.AskPerformFreeAction(
-                actions,
-                delegate
-                {
-                    Selection.ThisShip = originalShip;
+                TargetShip.GetAvailablePrintedActionsList(),
+                delegate {
+                    Selection.ThisShip = HostShip;
+                    Phases.CurrentSubPhase.Resume();
                     Triggers.FinishTrigger();
                 });
         }
-
-        public override void SkipButton()
-        {
-            Selection.ThisShip = originalShip;
-            Phases.FinishSubPhase(this.GetType());
-            Triggers.FinishTrigger();
-        }
-
     }
-
 }

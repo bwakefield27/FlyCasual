@@ -1,42 +1,31 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using Players;
-using Ship;
+using UnityEngine.UI;
 
 public class Global : MonoBehaviour {
 
+    public static Global Instance;
+
+    private static bool isAlreadyInitialized;
+
     public static string test = "I am accessible from every scene";
 
-    public static string CurrentVersion = "development";
+    public static string CurrentVersion = "0.5.0 HF 1";
+    public static int CurrentVersionInt = 100050001;
 
-    private static List<ShipConfiguration> shipConfigurations = new List<ShipConfiguration>();
-
-    private static List<System.Type> playerTypes = new List<System.Type>();
-
-    private static List<Faction> playerFactions = new List<Faction>();
-
-    public static List<Faction> PlayerFactions
+    void Awake()
     {
-        get { return playerFactions; }
-        private set { playerFactions = value; }
-    }
-
-    public static List<System.Type> PlayerTypes
-    {
-        get { return playerTypes; }
-        private set { playerTypes = value; }
-    }
-
-    public static List<ShipConfiguration> ShipConfigurations
-    {
-        get { return shipConfigurations; }
-        private set { shipConfigurations = value; }
-    }
-
-    void Start()
-    {
-        DontDestroyOnLoad(this.gameObject);
+        if (!isAlreadyInitialized)
+        {
+            Instance = this;
+            isAlreadyInitialized = true;
+            DontDestroyOnLoad(this.gameObject);
+        }
+        else
+        {
+            Destroy(this.gameObject);
+        }
     }
 
     void Update()
@@ -44,114 +33,40 @@ public class Global : MonoBehaviour {
         Tooltips.CheckTooltip();
     }
 
-    public static void Initialize()
+    public static void StartBattle()
     {
-        PlayerTypes = GetPlayerTypes();
-        ShipConfigurations = GetShipConfigurations();
+        ToggelLoadingScreen(false);
+        Phases.StartPhases();
     }
 
-    private static List<ShipConfiguration> GetShipConfigurations()
+    public static void ToggelLoadingScreen(bool isActive)
     {
-        List<ShipConfiguration> result = new List<ShipConfiguration>();
-        if (shipConfigurations.Count != 0)
-        {
-            result = shipConfigurations;
-        }
-        else
-        {
-            result = new List<ShipConfiguration>()
-                {
-                new ShipConfiguration
-                (
-                    new Ship.YT1300.OuterRimSmuggler(),
-                    PlayerNo.Player1,
-                    0
-                ),
-                new ShipConfiguration
-                (
-                    new Ship.TIEAdvanced.TempestSquadronPilot(),
-                    PlayerNo.Player2,
-                    0
-                )
-                /*new ShipConfiguration
-                (
-                    "Ship.XWing.LukeSkywalker",
-                    new List<string>() { "UpgradesList.R2D2", "UpgradesList.Marksmanship", "UpgradesList.ProtonTorpedoes" },
-                    PlayerNo.Player1,
-                    1
-                ),
-                new ShipConfiguration
-                (
-                    "Ship.TIEFighter.MaulerMithel",
-                    new List<string>() { "UpgradesList.Determination" },
-                    PlayerNo.Player2,
-                    1
-                ),
-                new ShipConfiguration
-                (
-                    "Ship.TIEFighter.NightBeast",
-                    new List<string>(),
-                    PlayerNo.Player2,
-                    1
-                )*/
-            };  
-        }
-        return result;
+        Transform loadingScreen = GameObject.Find("GlobalUI").transform.Find("OpponentSquad");
+        loadingScreen.GetComponent<Image>().sprite = MainMenu.GetRandomBackground();
+        if (loadingScreen != null) loadingScreen.gameObject.SetActive(isActive);
     }
 
-    private static List<System.Type> GetPlayerTypes()
+    public static Scene ActiveScene
     {
-        if (playerTypes.Count != 0)
+        get
         {
-            return playerTypes;
-        }
-        else
-        {
-            List<System.Type> result = new List<System.Type>
-                {
-                    typeof(HumanPlayer),
-                    typeof(HotacAiPlayer)
-                };
-            return result;
+            switch (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name)
+            {
+                case "MainMenu":
+                    return Scene.MainMenu;
+                case "Battle":
+                    return Scene.Battle;
+                default:
+                    return Scene.Undefined;
+            }
         }
     }
 
-    public static void RemoveAllPlayers()
+    public enum Scene
     {
-        playerTypes = new List<System.Type>();
-    }
-
-    public static void RemoveAllShips()
-    {
-        shipConfigurations = new List<ShipConfiguration>();
-    }
-
-    public static void RemoveAllFactions()
-    {
-        playerFactions = new List<Faction>();
-    }
-
-    public static void AddPlayer(System.Type playerType)
-    {
-        playerTypes.Add(playerType);
-    }
-
-    public static void AddFaction(Faction factionType)
-    {
-        playerFactions.Add(factionType);
-    }
-
-    public static void AddShip(GenericShip ship, PlayerNo playerNo, int shipCost)
-    {
-        shipConfigurations.Add(new ShipConfiguration(ship, playerNo, shipCost));
-    }
-
-    public static Faction GetPlayerFaction(PlayerNo playerNo)
-    {
-        Faction result = Faction.Rebels;
-        if (playerNo == PlayerNo.Player1) result = playerFactions[0];
-        if (playerNo == PlayerNo.Player2) result = playerFactions[1];
-        return result;
+        Undefined,
+        MainMenu,
+        Battle
     }
 
 }

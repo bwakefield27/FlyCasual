@@ -7,15 +7,29 @@
             public ArvelCrynyd() : base()
             {
                 PilotName = "Arvel Crynyd";
-                ImageUrl = "https://vignette.wikia.nocookie.net/xwing-miniatures/images/e/e3/Arvel_Crynyd.png";
                 PilotSkill = 6;
                 Cost = 23;
-            }
 
-            public override bool CanAttackBumpedTarget(GenericShip defender)
-            {
-                return true;
+                IsUnique = true;
+
+                PilotAbilities.Add(new Abilities.ArvelCrynydAbility());
             }
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class ArvelCrynydAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.CanAttackBumpedTargetAlways = true;
+        }
+
+        public override void DeactivateAbility()
+        {
+            HostShip.CanAttackBumpedTargetAlways = false;
         }
     }
 }

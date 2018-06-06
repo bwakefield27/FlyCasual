@@ -11,8 +11,9 @@ namespace Upgrade
     abstract public class GenericContactMine : GenericBomb
     {
         private int updatesCount;
-        private ObstaclesStayDetectorForced collisionChecker;
         private Action CallBack;
+
+        private int immediateDetonationsCheckedCount;
 
         public GenericContactMine() : base()
         {
@@ -36,31 +37,33 @@ namespace Upgrade
             Host.AddAvailableAction(action);
         }
 
-        public override void ActivateBomb(GameObject bombObject, Action callBack)
+        public override void ActivateBombs(List<GameObject> bombObjects, Action callBack)
         {
-            base.ActivateBomb(bombObject, callBack);
-
-            BombsManager.RegisterMine(bombObject, this);
             CallBack = callBack;
-            CheckImmediateDetonation();
+            CurrentBombObjects = bombObjects;
+
+            base.ActivateBombs(bombObjects, CheckImmediateDetonation);
         }
 
         private void CheckImmediateDetonation()
         {
-            collisionChecker = BombObject.GetComponentInChildren<ObstaclesStayDetectorForced>();
-            collisionChecker.ReCheckCollisionsStart();
+            foreach (var mineObject in CurrentBombObjects)
+            {
+                ObstaclesStayDetectorForced collisionChecker = mineObject.GetComponentInChildren<ObstaclesStayDetectorForced>();
+                collisionChecker.ReCheckCollisionsStart();
 
-            GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
-            Game.Movement.FuncsToUpdate.Add(UpdateColisionDetection);
+                GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
+                Game.Movement.FuncsToUpdate.Add(delegate { return UpdateColisionDetection(collisionChecker); });
+            }
         }
 
-        private bool UpdateColisionDetection()
+        private bool UpdateColisionDetection(ObstaclesStayDetectorForced collisionChecker)
         {
             bool isFinished = false;
 
             if (updatesCount > 1)
             {
-                GetResults();
+                GetResults(collisionChecker);
                 isFinished = true;
             }
             else
@@ -71,7 +74,7 @@ namespace Upgrade
             return isFinished;
         }
 
-        private void GetResults()
+        private void GetResults(ObstaclesStayDetectorForced collisionChecker)
         {
             collisionChecker.ReCheckCollisionsFinish();
 
@@ -85,31 +88,43 @@ namespace Upgrade
                     Name = "Damage from mine",
                     TriggerOwner = detonatedShip.Owner.PlayerNo,
                     TriggerType = TriggerTypes.OnPositionFinish,
-                    EventHandler = Detonate,
-                    Sender = detonatedShip
+                    EventHandler = TryDetonate,
+                    EventArgs = new BombDetonationEventArgs()
+                    {
+                        DetonatedShip = detonatedShip,
+                        BombObject = collisionChecker.transform.parent.gameObject
+                    }
                 });
-
-                Triggers.ResolveTriggers(TriggerTypes.OnBombDetonated, CallBack);
             }
-            else
+
+            immediateDetonationsCheckedCount++;
+            int minesDropped = string.IsNullOrEmpty(bombSidePrefabPath) ? 1 : 3;
+            if (immediateDetonationsCheckedCount == minesDropped)
             {
-                CallBack();
+                GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
+
+                for (int i = 0; i < minesDropped; i++)
+                {
+                    Game.Movement.FuncsToUpdate.Remove(delegate { return UpdateColisionDetection(collisionChecker); });
+                }
+
+                immediateDetonationsCheckedCount = 0;
+                Triggers.ResolveTriggers(TriggerTypes.OnBombIsDetonated, CallBack);
             }
         }
 
-        public override void Detonate(object sender, EventArgs e)
+        protected override void Detonate()
         {
-            BombsManager.UnregisterMine(BombObject);
-            RegisterDetonationTriggerForShip(sender as GenericShip);
+            RegisterDetonationTriggerForShip(BombsManager.DetonatedShip);
 
-            base.Detonate(sender, e);
+            base.Detonate();
         }
 
-        public override void Discard()
+        public override void Discard(Action callBack)
         {
             Host.AfterGenerateAvailableActionsList -= PerformDropBombAction;
 
-            base.Discard();
+            base.Discard(callBack);
         }
 
     }

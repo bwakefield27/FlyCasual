@@ -3,6 +3,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using GameModes;
+using UnityEngine.EventSystems;
+using SquadBuilderNS;
+using BoardTools;
 
 //Todo: Move to different scripts by menu names
 
@@ -18,11 +22,23 @@ public class UI : MonoBehaviour {
     public void Update()
     {
         UpdateShipIds();
+        UpdateDirectionsMenu();
+        CheckSwarmManager();
     }
 
     private void UpdateShipIds()
     {
         ShowShipIds = Input.GetKey(KeyCode.LeftAlt);
+    }
+
+    private void CheckSwarmManager()
+    {
+        SwarmManager.CheckActivation();
+    }
+
+    private void UpdateDirectionsMenu()
+    {
+        DirectionsMenu.Update();
     }
 
     //Move to context menu
@@ -60,9 +76,9 @@ public class UI : MonoBehaviour {
         GameObject.Find("UI").transform.Find("ContextMenuPanel").gameObject.SetActive(false);
     }
 
-    public void ShowDirectionMenu()
+    public static void ShowDirectionMenu()
     {
-        DirectionsMenu.Show();
+        DirectionsMenu.Show(GameMode.CurrentGameMode.AssignManeuver);
     }
 
     public static void HideDirectionMenu()
@@ -73,7 +89,13 @@ public class UI : MonoBehaviour {
     public static void HideTemporaryMenus()
     {
         HideContextMenu();
-        if (Phases.CurrentSubPhase.GetType() == typeof(SubPhases.PlanningSubPhase)) HideDirectionMenu();
+        if (Phases.CurrentSubPhase != null)
+        {
+            if (Phases.CurrentSubPhase.GetType() == typeof(SubPhases.PlanningSubPhase) && !SwarmManager.IsActive)
+            {
+                HideDirectionMenu();
+            }
+        }
     }
 
     //TODO: use in static generic UI class
@@ -92,12 +114,14 @@ public class UI : MonoBehaviour {
     {
         GameObject gameResultsPanel = GameObject.Find("UI").transform.Find("GameResultsPanel").gameObject;
         gameResultsPanel.transform.Find("Panel").transform.Find("Congratulations").GetComponent<Text>().text = results;
+        gameResultsPanel.transform.Find("Panel").Find("Restart").gameObject.SetActive(!(GameMode.CurrentGameMode is NetworkGame));
         gameResultsPanel.SetActive(true);
     }
 
     public static void ToggleInGameMenu()
     {
         GameObject gameResultsPanel = GameObject.Find("UI").transform.Find("GameResultsPanel").gameObject;
+        gameResultsPanel.transform.Find("Panel").Find("Restart").gameObject.SetActive(!(GameMode.CurrentGameMode is NetworkGame));
         gameResultsPanel.SetActive(!gameResultsPanel.activeSelf);
     }
 
@@ -131,14 +155,17 @@ public class UI : MonoBehaviour {
 
     public static void AddTestLogEntry(string text)
     {
-        GameObject area = GameObject.Find("UI").transform.Find("GameLogHolder").Find("Scroll").Find("Viewport").Find("Content").gameObject;
-        GameObject logText = (GameObject)Resources.Load("Prefabs/LogText", typeof(GameObject));
-        GameObject newLogEntry = Instantiate(logText, area.transform);
-        newLogEntry.transform.localPosition = new Vector3(5, lastLogTextPosition, 0);
-        lastLogTextPosition += lastLogTextStep;
-        if (area.GetComponent<RectTransform>().sizeDelta.y < Mathf.Abs(lastLogTextPosition)) area.GetComponent<RectTransform>().sizeDelta = new Vector2(area.GetComponent<RectTransform>().sizeDelta.x, Mathf.Abs(lastLogTextPosition));
-        GameObject.Find("UI").transform.Find("GameLogHolder").Find ("Scroll").GetComponent<ScrollRect>().verticalNormalizedPosition = 0;
-        newLogEntry.GetComponent<Text>().text = text;
+        if (GameObject.Find("UI").transform.Find("GameLogHolder") != null)
+        {
+            GameObject area = GameObject.Find("UI").transform.Find("GameLogHolder").Find("Scroll").Find("Viewport").Find("Content").gameObject;
+            GameObject logText = (GameObject)Resources.Load("Prefabs/LogText", typeof(GameObject));
+            GameObject newLogEntry = Instantiate(logText, area.transform);
+            newLogEntry.transform.localPosition = new Vector3(5, lastLogTextPosition, 0);
+            lastLogTextPosition += lastLogTextStep;
+            if (area.GetComponent<RectTransform>().sizeDelta.y < Mathf.Abs(lastLogTextPosition)) area.GetComponent<RectTransform>().sizeDelta = new Vector2(area.GetComponent<RectTransform>().sizeDelta.x, Mathf.Abs(lastLogTextPosition));
+            GameObject.Find("UI").transform.Find("GameLogHolder").Find("Scroll").GetComponent<ScrollRect>().verticalNormalizedPosition = 0;
+            newLogEntry.GetComponent<Text>().text = text;
+        }
     }
 
     public void ShowDecisionsPanel()
@@ -159,6 +186,11 @@ public class UI : MonoBehaviour {
         HideNextButton();
         Roster.AllShipsHighlightOff();
 
+        GameMode.CurrentGameMode.NextButtonEffect();
+    }
+
+    public static void NextButtonEffect()
+    {
         Phases.CurrentSubPhase.NextButton();
     }
 
@@ -167,18 +199,41 @@ public class UI : MonoBehaviour {
         HideNextButton();
         Roster.AllShipsHighlightOff();
 
+        GameMode.CurrentGameMode.SkipButtonEffect();
+    }
+
+    public static void SkipButtonEffect()
+    {
         Phases.CurrentSubPhase.SkipButton();
     }
 
-    public void ClickDeclareTarget()
+    public static void ClickDeclareTarget()
     {
-        Combat.DeclareTarget();
+        GameMode.CurrentGameMode.DeclareTarget(Selection.ThisShip.ShipId, Selection.AnotherShip.ShipId);
+    }
+
+    public static void CheckFiringRangeAndShow()
+    {
+        ShotInfo shotInfo = Actions.GetFiringRangeAndShow(Selection.ThisShip, Selection.AnotherShip);
+        if (shotInfo.Range < 4)
+        {
+            Messages.ShowInfo("Range " + shotInfo.Range);
+            if (!shotInfo.InArc) Messages.ShowInfoToHuman("Out of arc");
+        }
+        else
+        {
+            Messages.ShowError("Out of range");
+        }
+        
     }
 
     public static void ShowNextButton()
     {
-        GameObject.Find("UI").transform.Find("NextPanel").gameObject.SetActive(true);
-        GameObject.Find("UI/NextPanel").transform.Find("NextButton").GetComponent<Animator>().enabled = false;
+        if (Roster.GetPlayer(Phases.CurrentPhasePlayer).Type == Players.PlayerType.Human)
+        {
+            GameObject.Find("UI").transform.Find("NextPanel").gameObject.SetActive(true);
+            GameObject.Find("UI/NextPanel").transform.Find("NextButton").GetComponent<Animator>().enabled = false;
+        }
     }
 
     public static void HideNextButton()
@@ -191,9 +246,13 @@ public class UI : MonoBehaviour {
         GameObject.Find("UI").transform.Find("NextPanel").Find("NextButton").GetComponent<Button>().colors = colors;
     }
 
-    public static void ShowSkipButton()
+    public static void ShowSkipButton(string text = null)
     {
-        GameObject.Find("UI").transform.Find("SkipPanel").gameObject.SetActive(true);
+        if (Roster.GetPlayer(Phases.CurrentPhasePlayer).Type == Players.PlayerType.Human)
+        {
+            GameObject.Find("UI").transform.Find("SkipPanel").GetComponentInChildren<Text>().text = text ?? "Skip";
+            GameObject.Find("UI").transform.Find("SkipPanel").gameObject.SetActive(true);
+        }
     }
 
     public static void HideSkipButton()
@@ -213,17 +272,42 @@ public class UI : MonoBehaviour {
 
     public void HideInformCritPanel()
     {
-        InformCrit.HidePanel();
+        InformCrit.ButtonConfirm();
     }
 
     public void ReturnToMainMenu()
     {
-        SceneManager.LoadScene("MainMenu");
+        GameMode.CurrentGameMode.ReturnToMainMenu();
     }
 
     public void QuitGame()
     {
-        Application.Quit();
+        GameMode.CurrentGameMode.QuitToDesktop();
     }
 
+    public void GoNextShortcut()
+    {
+        bool pressNext = false;
+        bool pressCancel = false;
+
+        if (GameObject.Find("UI").transform.Find("NextPanel").gameObject.activeSelf) pressNext = true;
+        else if (GameObject.Find("UI").transform.Find("SkipPanel").gameObject.activeSelf) pressCancel = true;
+
+        if (pressNext) ClickNextPhase();
+        else if (pressCancel) ClickSkipPhase();
+    }
+
+    public static void AssignManeuverButtonPressed()
+    {
+        HideDirectionMenu();
+
+        string maneuverCode = EventSystem.current.currentSelectedGameObject.name;
+        DirectionsMenu.Callback(maneuverCode);
+    }
+
+    public void RestartMatch()
+    {
+        Rules.FinishGame();
+        SquadBuilder.ReGenerateSquads(SquadBuilder.SwitchToBattlecene);
+    }
 }

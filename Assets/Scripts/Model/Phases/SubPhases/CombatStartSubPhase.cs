@@ -24,18 +24,26 @@ namespace SubPhases
 
         public override void Next()
         {
+            GenericSubPhase subphase = Phases.StartTemporarySubPhaseNew("Notification", typeof(NotificationSubPhase), StartCombatSubPhase);
+            (subphase as NotificationSubPhase).TextToShow = RuleSets.RuleSet.Instance.CombatPhaseName;
+            subphase.Start();
+        }
+
+        private void StartCombatSubPhase()
+        {
             Phases.CurrentSubPhase = new CombatSubPhase();
+            Phases.CurrentSubPhase.CallBack = Combat.FinishCombatSubPhase;
             Phases.CurrentSubPhase.Start();
             Phases.CurrentSubPhase.Prepare();
             Phases.CurrentSubPhase.Initialize();
         }
 
-        public override bool ThisShipCanBeSelected(Ship.GenericShip ship)
+        public override bool ThisShipCanBeSelected(Ship.GenericShip ship, int mouseKeyIsPressed)
         {
             return false;
         }
 
-        public override bool AnotherShipCanBeSelected(Ship.GenericShip targetShip)
+        public override bool AnotherShipCanBeSelected(Ship.GenericShip targetShip, int mouseKeyIsPressed)
         {
             return false;
         }

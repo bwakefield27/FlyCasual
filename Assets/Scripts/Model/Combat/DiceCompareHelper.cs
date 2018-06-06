@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -31,27 +32,40 @@ public class DiceCompareHelper
         iconPrefabHit = helperPanel.transform.Find("DiceImages").gameObject.transform.Find("AttackHit").gameObject;
         iconPrefabCrit = helperPanel.transform.Find("DiceImages").gameObject.transform.Find("AttackCrit").gameObject;
 
-        CreateIcons(DieSide.Crit, AttackDiceroll.CriticalSuccesses);
-        CreateIcons(DieSide.Success, AttackDiceroll.RegularSuccesses);
+        if (!AttackDiceroll.CancelCritsFirst)
+        {
+            CreateIcons(AttackDiceroll.DiceList.Where(n => n.Side == DieSide.Crit).ToList());
+            CreateIcons(AttackDiceroll.DiceList.Where(n => n.Side == DieSide.Success).ToList());
+        }
+        else
+        {
+            CreateIcons(AttackDiceroll.DiceList.Where(n => n.Side == DieSide.Success).ToList());
+            CreateIcons(AttackDiceroll.DiceList.Where(n => n.Side == DieSide.Crit).ToList());
+        }
 
         UpdatePanelSize();
     }
 
-    private void CreateIcons(DieSide dieSide, int count)
+    private void CreateIcons(List<Die> dice)
     {
-        for (int i = 0; i < count; i++)
+        foreach (var die in dice)
         {
-            CreateIcon(dieSide);
+            CreateIcon(die);
         }
     }
 
-    private void CreateIcon(DieSide dieSide)
+    private void CreateIcon(Die die)
     {
-        GameObject iconPrefab = (dieSide == DieSide.Success) ? iconPrefabHit : iconPrefabCrit;
+        GameObject iconPrefab = (die.Side == DieSide.Success) ? iconPrefabHit : iconPrefabCrit;
         GameObject newIcon = MonoBehaviour.Instantiate(iconPrefab, helperPanel.transform.Find("DiceImages"));
         newIcon.transform.localPosition = new Vector3(iconsCount * 100, 0, 0);
-        newIcon.name = (dieSide == DieSide.Success) ? "Hit" : "Crit";
+        newIcon.name = (die.Side == DieSide.Success) ? "Hit" : "Crit";
         newIcon.SetActive(true);
+
+        if (die.IsUncancelable)
+        {
+            newIcon.transform.Find("Uncancellable").gameObject.SetActive(true);
+        }
 
         diceIcons.Add(newIcon);
 
@@ -84,24 +98,50 @@ public class DiceCompareHelper
 
     public void ShowCancelled(DiceRoll defenceDiceRoll)
     {
-        int cancelledRegularHits = 0;
-        int cancelledCriticalHits = 0;
-
-        int cancelsNum = defenceDiceRoll.Successes;
-
-        int regularHits = AttackDiceroll.RegularSuccesses;
-        cancelledRegularHits = (cancelsNum > regularHits) ? regularHits: cancelsNum;
-        cancelsNum = cancelsNum - cancelledRegularHits;
-
-        if (cancelsNum > 0)
+        DiceRoll diceRollForTesting = new DiceRoll(DiceKind.Attack, 0, DiceRollCheckType.Virtual);
+        foreach (Die realDie in AttackDiceroll.DiceList)
         {
-            int criticalHits = AttackDiceroll.CriticalSuccesses;
+            Die newDie = diceRollForTesting.AddDice(realDie.Side);
+            newDie.IsUncancelable = realDie.IsUncancelable;
+        };
+
+        Dictionary<string, int> results = diceRollForTesting.CancelHitsByDefence(defenceDiceRoll.Successes, true); //Dry run to calculate results
+        int cancelledRegularHits = results["hits"];
+        int cancelledCriticalHits = results["crits"];
+        //int cancelsNum = defenceDiceRoll.Successes;
+        //int regularHits = AttackDiceroll.RegularSuccesses;
+        //int criticalHits = AttackDiceroll.CriticalSuccesses;
+
+        /*if (!AttackDiceroll.CancelCritsFirst)
+        {
+            cancelledRegularHits = (cancelsNum > regularHits) ? regularHits : cancelsNum;
+            cancelsNum = cancelsNum - cancelledRegularHits;
+
+            if (cancelsNum > 0)
+            {
+                cancelledCriticalHits = (cancelsNum > criticalHits) ? criticalHits : cancelsNum;
+                cancelsNum = cancelsNum - cancelledCriticalHits;
+            }
+        }
+        else
+        {
             cancelledCriticalHits = (cancelsNum > criticalHits) ? criticalHits : cancelsNum;
             cancelsNum = cancelsNum - cancelledCriticalHits;
-        }
+
+            if (cancelsNum > 0)
+            {
+                cancelledRegularHits = (cancelsNum > regularHits) ? regularHits : cancelsNum;
+                cancelsNum = cancelsNum - cancelledRegularHits;
+            }
+        }*/
 
         List<GameObject> reversedDiceIcons = new List<GameObject>(diceIcons);
         reversedDiceIcons.Reverse();
+
+        foreach (var diceIcon in reversedDiceIcons)
+        {
+            ToggleDisableDice(diceIcon, true);
+        }
 
         foreach (var diceIcon in reversedDiceIcons)
         {
@@ -137,6 +177,11 @@ public class DiceCompareHelper
             b = currentColor.b,
             a = (isActive) ? 1 : 0.25f
         };
+    }
+
+    public bool IsActive()
+    {
+        return helperPanel != null;
     }
 
 }

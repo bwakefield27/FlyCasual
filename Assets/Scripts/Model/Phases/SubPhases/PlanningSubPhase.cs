@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Ship;
 
 namespace SubPhases
 {
@@ -10,6 +11,7 @@ namespace SubPhases
 
         public override void Start()
         {
+            base.Start();
             Name = "Planning SubPhase";
         }
 
@@ -21,24 +23,33 @@ namespace SubPhases
 
         public override void Initialize()
         {
+            PlayerAssignsManeuvers();
+        }
+
+        private void PlayerAssignsManeuvers()
+        {
             UpdateHelpInfo();
-            HighlightShips();
+            Roster.HighlightShipsFiltered(FilterShipsToAssignManeuver);
+
+            if (Roster.AllManuversAreAssigned(Phases.CurrentPhasePlayer))
+            {
+                UI.ShowNextButton();
+                UI.HighlightNextButton();
+            }
+
             Roster.GetPlayer(RequiredPlayer).AssignManeuver();
         }
 
         public override void Next()
         {
-            if (Roster.AllManuersAreAssigned(RequiredPlayer))
+            if (Roster.AllManuversAreAssigned(RequiredPlayer))
             {
                 HideAssignedManeuversInHotSeatGame();
 
                 if (RequiredPlayer == Phases.PlayerWithInitiative)
                 {
                     RequiredPlayer = Roster.AnotherPlayer(RequiredPlayer);
-
-                    UpdateHelpInfo();
-                    HighlightShips();
-                    Roster.GetPlayer(RequiredPlayer).AssignManeuver();
+                    PlayerAssignsManeuvers();
                 }
                 else
                 {
@@ -53,7 +64,7 @@ namespace SubPhases
             {
                 foreach (var shipHolder in Roster.GetPlayer(RequiredPlayer).Ships)
                 {
-                    Roster.ToggelManeuverVisibility(shipHolder.Value, false);
+                    Roster.ToggleManeuverVisibility(shipHolder.Value, false);
                 }
             }
         }
@@ -63,10 +74,10 @@ namespace SubPhases
             Phases.CurrentPhase.NextPhase();
         }
 
-        public override bool ThisShipCanBeSelected(Ship.GenericShip ship)
+        public override bool ThisShipCanBeSelected(GenericShip ship, int mouseKeyIsPressed)
         {
             bool result = false;
-            if (ship.Owner.PlayerNo == RequiredPlayer)
+            if ((ship.Owner.PlayerNo == RequiredPlayer) && (Roster.GetPlayer(RequiredPlayer).GetType() == typeof(Players.HumanPlayer)))
             {
                 result = true;
             }
@@ -77,7 +88,7 @@ namespace SubPhases
             return result;
         }
 
-        public override int CountActiveButtons(Ship.GenericShip ship)
+        public override int CountActiveButtons(GenericShip ship)
         {
             int result = 0;
             GameObject.Find("UI").transform.Find("ContextMenuPanel").Find("MoveMenuButton").gameObject.SetActive(true);
@@ -85,19 +96,28 @@ namespace SubPhases
             return result;
         }
 
-        private void HighlightShips()
+        private bool FilterShipsToAssignManeuver(GenericShip ship)
         {
-            Roster.AllShipsHighlightOff();
-            foreach (var ship in Roster.GetPlayer(RequiredPlayer).Ships)
-            {
-                ship.Value.HighlightCanBeSelectedOn();
-                Roster.RosterPanelHighlightOn(ship.Value);
-            }
+            return ship.AssignedManeuver == null && ship.Owner.PlayerNo == RequiredPlayer && !RulesList.IonizationRule.IsIonized(ship);
         }
 
         public override void NextButton()
         {
+            if (DirectionsMenu.IsVisible) UI.HideDirectionMenu();
             Next();
+        }
+
+        public override void DoSelectThisShip(GenericShip ship, int mouseKeyIsPressed)
+        {
+            if (!RulesList.IonizationRule.IsIonized(ship))
+            {
+                UI.ShowDirectionMenu();
+            }
+            else
+            {
+                Messages.ShowError("Ship is ionized: dial cannot be assigned");
+            }
+            
         }
 
     }

@@ -1,4 +1,8 @@
-﻿using Upgrade;
+﻿using UnityEngine;
+using Upgrade;
+using Abilities;
+using Ship;
+using Movement;
 
 namespace UpgradesList
 {
@@ -6,31 +10,45 @@ namespace UpgradesList
     {
         public NienNunb() : base()
         {
-            Type = UpgradeType.Crew;
+            Types.Add(UpgradeType.Crew);
             Name = "Nien Nunb";
-            Cost = 2;
+            Cost = 1;
+
             isUnique = true;
+
+            AvatarOffset = new Vector2(50, 1);
+
+            UpgradeAbilities.Add(new NienNunbCrewAbility());
         }
 
-        public override bool IsAllowedForShip(Ship.GenericShip ship)
+        public override bool IsAllowedForShip(GenericShip ship)
         {
-            return ship.faction == Faction.Rebels;
+            return ship.faction == Faction.Rebel;
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class NienNunbCrewAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.AfterGetManeuverColorDecreaseComplexity += NienNunbAbility;
         }
 
-        public override void AttachToShip(Ship.GenericShip host)
+        public override void DeactivateAbility()
         {
-            base.AttachToShip(host);
-
-            host.AfterGetManeuverColorDecreaseComplexity += NienNunbAbility;
+            HostShip.AfterGetManeuverColorDecreaseComplexity -= NienNunbAbility;
         }
 
-        private void NienNunbAbility(Ship.GenericShip ship, ref Movement.MovementStruct movement)
+        private void NienNunbAbility(GenericShip ship, ref MovementStruct movement)
         {
-            if (movement.ColorComplexity != Movement.ManeuverColor.None)
+            if (movement.ColorComplexity != MovementComplexity.None)
             {
-                if (movement.Bearing == Movement.ManeuverBearing.Straight)
+                if (movement.Bearing == ManeuverBearing.Straight)
                 {
-                    movement.ColorComplexity = Movement.ManeuverColor.Green;
+                    movement.ColorComplexity = MovementComplexity.Easy;
                 }
             }
         }

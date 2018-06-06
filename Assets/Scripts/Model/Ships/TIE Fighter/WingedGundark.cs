@@ -1,6 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Ship;
+using System;
+using BoardTools;
 
 namespace Ship
 {
@@ -11,67 +14,76 @@ namespace Ship
             public WingedGundark() : base()
             {
                 PilotName = "\"Winged Gundark\"";
-                ImageUrl = "https://vignette2.wikia.nocookie.net/xwing-miniatures/images/9/9d/Winged-gundark.png";
-                IsUnique = true;
                 PilotSkill = 5;
                 Cost = 15;
-            }
 
-            public override void InitializePilot()
-            {
-                base.InitializePilot();
-                AfterGenerateAvailableActionEffectsList += WingedGundarkPilotAbility;
-            }
+                IsUnique = true;
 
-            public void WingedGundarkPilotAbility(GenericShip ship)
-            {
-                ship.AddAvailableActionEffect(new PilotAbilities.WingedGundarkAction());
+                PilotAbilities.Add(new Abilities.WingedGundarkAbility());
             }
         }
     }
 }
 
-namespace PilotAbilities
+namespace Abilities
 {
-    public class WingedGundarkAction : ActionsList.GenericAction
+    public class WingedGundarkAbility : GenericAbility
     {
-
-        public WingedGundarkAction()
+        public override void ActivateAbility()
         {
-            Name = EffectName = "\"Winged Gundark\"'s ability";
+            HostShip.AfterGenerateAvailableActionEffectsList += WingedGundarkPilotAbility;
         }
 
-        public override void ActionEffect(System.Action callBack)
+        public override void DeactivateAbility()
         {
-            Combat.CurentDiceRoll.ChangeOne(DieSide.Success, DieSide.Crit);
-            callBack();
+            HostShip.AfterGenerateAvailableActionEffectsList -= WingedGundarkPilotAbility;
         }
 
-        public override bool IsActionEffectAvailable()
+        private void WingedGundarkPilotAbility(GenericShip ship)
         {
-            bool result = false;
-            if (Combat.AttackStep == CombatStep.Attack)
+            ship.AddAvailableActionEffect(new WingedGundarkAction());
+        }
+
+        private class WingedGundarkAction : ActionsList.GenericAction
+        {
+
+            public WingedGundarkAction()
             {
-                Board.ShipShotDistanceInformation shotInformation = new Board.ShipShotDistanceInformation(Combat.Attacker, Combat.Defender, Combat.ChosenWeapon);
-                if (shotInformation.Range == 1)
+                Name = EffectName = "\"Winged Gundark\"'s ability";
+            }
+
+            public override void ActionEffect(System.Action callBack)
+            {
+                Combat.CurrentDiceRoll.ChangeOne(DieSide.Success, DieSide.Crit);
+                callBack();
+            }
+
+            public override bool IsActionEffectAvailable()
+            {
+                bool result = false;
+                if (Combat.AttackStep == CombatStep.Attack)
                 {
-                    result = true;
+                    ShotInfo shotInformation = new ShotInfo(Combat.Attacker, Combat.Defender, Combat.ChosenWeapon);
+                    if (shotInformation.Range == 1)
+                    {
+                        result = true;
+                    }
                 }
+                return result;
             }
-            return result;
-        }
 
-        public override int GetActionEffectPriority()
-        {
-            int result = 0;
-
-            if (Combat.AttackStep == CombatStep.Attack)
+            public override int GetActionEffectPriority()
             {
-                if (Combat.DiceRollAttack.RegularSuccesses > 0) result = 20;
+                int result = 0;
+
+                if (Combat.AttackStep == CombatStep.Attack)
+                {
+                    if (Combat.DiceRollAttack.RegularSuccesses > 0) result = 20;
+                }
+
+                return result;
             }
 
-            return result;
         }
-
     }
 }

@@ -8,6 +8,7 @@ namespace AI
     public class Swerve
     {
         protected MovementPrediction movementPrediction;
+        protected GenericMovement originalMovement;
         protected List<MovementStruct> alternativeManeuvers = new List<MovementStruct>();
         protected List<MovementStruct> failedManeuvers = new List<MovementStruct>();
 
@@ -17,6 +18,7 @@ namespace AI
         {
             IsForced = isForced;
 
+            originalMovement = Selection.ThisShip.AssignedManeuver;
             alternativeManeuvers = GetAlternativeManeuvers(Selection.ThisShip.AssignedManeuver);
             TryAlternativeMovement();
         }
@@ -26,27 +28,28 @@ namespace AI
             if (alternativeManeuvers.Count > 0)
             {
                 MovementStruct maneuver = alternativeManeuvers[0];
+                maneuver.UpdateColorComplexity();
                 alternativeManeuvers.Remove(alternativeManeuvers[0]);
 
-                if (failedManeuvers.Contains(maneuver))
+                if (failedManeuvers.Contains(maneuver) || !Selection.ThisShip.HasManeuver(maneuver))
                 {
                     TryAlternativeMovement();
                 }
                 else
                 {
-                    GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
-                    GenericMovement newMovementAttempt = Game.Movement.MovementFromStruct(maneuver);
+                    GenericMovement newMovementAttempt = ShipMovementScript.MovementFromStruct(maneuver);
 
                     if (DebugManager.DebugAI) Debug.Log("Tries: " + newMovementAttempt);
 
+                    Selection.ThisShip.SetAssignedManeuver(newMovementAttempt);
                     newMovementAttempt.Initialize();
                     movementPrediction = new MovementPrediction(newMovementAttempt, CheckSwerveAlternativePrediction);
                 }
             }
             else
             {
-                if (DebugManager.DebugAI) Messages.ShowInfo("AI doesn't see alternatives to the asteroid collision");
-                if (DebugManager.DebugAI) Debug.Log("So AI decides to left it as is...");
+                Console.Write("Ship doesn't see alternatives to the asteroid collision", LogTypes.AI, false, "yellow");
+                Selection.ThisShip.SetAssignedManeuver(originalMovement);
                 Selection.ThisShip.AssignedManeuver.LaunchShipMovement();
             }
         }
@@ -56,7 +59,7 @@ namespace AI
             if ((movementPrediction.AsteroidsHit.Count == 0) && (!movementPrediction.IsOffTheBoard))
             {
                 if (DebugManager.DebugAI) Debug.Log("And it works!");
-                if (DebugManager.DebugAI) Messages.ShowInfo("AI avoids asteroid collision");
+                Console.Write("Ship found maneuver to avoid asteroid collision\n", LogTypes.AI, true, "yellow");
 
                 alternativeManeuvers = new List<MovementStruct>();
 

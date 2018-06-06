@@ -3,70 +3,113 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using SubPhases;
+using Tokens;
+using ActionsList;
+using GameModes;
 
 namespace Ship
 {
     public partial class GenericShip
     {
 
-        public      List<ActionsList.GenericAction> BuiltInActions                          = new List<ActionsList.GenericAction>();
-        private     List<ActionsList.GenericAction> AvailableActionsList                    = new List<ActionsList.GenericAction>();
-        private     List<ActionsList.GenericAction> AvailableFreeActionsList                = new List<ActionsList.GenericAction>();
-        private     List<ActionsList.GenericAction> AlreadyExecutedActions                  = new List<ActionsList.GenericAction>();
-        private     List<ActionsList.GenericAction> AvailableActionEffects                  = new List<ActionsList.GenericAction>();
-        private     List<ActionsList.GenericAction> AvailableOppositeActionEffects          = new List<ActionsList.GenericAction>();
-        private     List<ActionsList.GenericAction> AlreadyExecutedActionEffects            = new List<ActionsList.GenericAction>();
-        private     List<ActionsList.GenericAction> AlreadyExecutedOppositeActionEffects    = new List<ActionsList.GenericAction>();
+        public      List<GenericAction> PrintedActions                          = new List<GenericAction>();
+        private     List<GenericAction> AvailableActionsList                    = new List<GenericAction>();
+        private     List<GenericAction> AvailableFreeActionsList                = new List<GenericAction>();
+        private     List<GenericAction> AlreadyExecutedActions                  = new List<GenericAction>();
+        private     List<GenericAction> AvailableActionEffects                  = new List<GenericAction>();
+        private     List<GenericAction> AvailableOppositeActionEffects          = new List<GenericAction>();
+        private     List<GenericAction> AvailableCompareResultsEffects          = new List<GenericAction>();
+        private     List<GenericAction> AlreadyExecutedActionEffects            = new List<GenericAction>();
+        private     List<GenericAction> AlreadyExecutedOppositeActionEffects    = new List<GenericAction>();
+        private     List<GenericAction> AlreadyExecutedCompareResultsEffects    = new List<GenericAction>();
 
-        private     List<Tokens.GenericToken> AssignedTokens = new List<Tokens.GenericToken>();
+        public GenericAction PlannedLinkedAction;
 
         // EVENTS
+        public event EventHandlerShip OnMovementActivation;
 
         public event EventHandlerShip AfterGenerateAvailableActionsList;
         public event EventHandlerActionBool OnTryAddAvailableAction;
+        public static event EventHandlerShipActionBool OnTryAddAvailableActionGlobal;
 
         public event EventHandlerShip AfterGenerateAvailableActionEffectsList;
         public static event EventHandler AfterGenerateAvailableActionEffectsListGlobal;
-        public event EventHandlerActionBool OnTryAddAvailableActionEffect;
+        public event EventHandlerShipActionBool OnTryAddAvailableActionEffect;
+        public static event EventHandlerShipActionBool OnTryAddAvailableActionEffectGlobal;
 
         public event EventHandlerShip AfterGenerateAvailableOppositeActionEffectsList;
         public static event EventHandler AfterGenerateAvailableOppositeActionEffectsListGlobal;
-        public event EventHandlerActionBool OnTryAddAvailableOppositeActionEffect;
+        public event EventHandlerShipActionBool OnTryAddAvailableOppositeActionEffect;
+
+        public event EventHandlerShip AfterGenerateAvailableCompareResultsEffectsList;
+        public event EventHandlerActionBool OnTryAddAvailableCompareResultsEffect;
 
         public event EventHandlerShip OnActionDecisionSubphaseEnd;
+        public event EventHandlerAction BeforeFreeActionIsPerformed;
         public event EventHandlerAction OnActionIsPerformed;
 
         public event EventHandlerShipType OnTokenIsAssigned;
+        public event EventHandlerShipType BeforeTokenIsAssigned;
+        public static event EventHandlerShipType BeforeTokenIsAssignedGlobal;
         public static event EventHandlerShipType OnTokenIsAssignedGlobal;
         public event EventHandlerShipType OnTokenIsSpent;
         public static event EventHandlerShipType OnTokenIsSpentGlobal;
-        public event EventHandlerShipType AfterTokenIsRemoved;
+        public event EventHandlerShipType OnTokenIsRemoved;
+        public static event EventHandlerShipType OnTokenIsRemovedGlobal;
+
+        public event EventHandlerShipType OnConditionIsAssigned;
+        public event EventHandlerShipType OnConditionIsRemoved;
+
+        public event EventHandlerShip OnTargetLockIsAcquired;
+
+        public event EventHandlerShip OnCoordinateTargetIsSelected;
+        public event EventHandlerShip OnJamTargetIsSelected;        
+
+        public event EventHandlerShip OnRerollIsConfirmed;
+
+        public EventHandlerTokenBool BeforeRemovingTokenInEndPhase;
 
         // ACTIONS
-        public void CallOnActionDecisionSubphaseEnd()
+
+        public void CallMovementActivation(Action callBack)
+        {
+            if (OnMovementActivation != null) OnMovementActivation(this);
+
+            Triggers.ResolveTriggers(TriggerTypes.OnMovementActivation, callBack);
+        }
+
+        public void CallOnActionDecisionSubphaseEnd(Action callback)
         {
             if (OnActionDecisionSubphaseEnd != null) OnActionDecisionSubphaseEnd(this);
+
+            Triggers.ResolveTriggers(TriggerTypes.OnActionDecisionSubPhaseEnd, callback);
         }
 
-        public void CallActionIsTaken(ActionsList.GenericAction action)
+        public void CallActionIsTaken(GenericAction action, Action callBack)
         {
             if (OnActionIsPerformed != null) OnActionIsPerformed(action);
+
+            Triggers.ResolveTriggers(TriggerTypes.OnActionIsPerformed, callBack);
         }
-        private void AddBuiltInActions()
+        
+        public void CallBeforeFreeActionIsPerformed(GenericAction action, Action callBack)
         {
-            BuiltInActions.Add(new ActionsList.FocusAction());
+            if (BeforeFreeActionIsPerformed != null) BeforeFreeActionIsPerformed(action);
+
+            Triggers.ResolveTriggers(TriggerTypes.BeforeFreeActionIsPerformed, callBack);
         }
 
-        public List<ActionsList.GenericAction> GetActionsFromActionBar()
+        public List<GenericAction> GetActionsFromActionBar()
         {
-            return BuiltInActions;
+            return PrintedActions;
         }
 
         public void GenerateAvailableActionsList()
         {
-            AvailableActionsList = new List<ActionsList.GenericAction>();
+            AvailableActionsList = new List<GenericAction>();
 
-            foreach (var action in BuiltInActions)
+            foreach (var action in PrintedActions)
             {
                 AddAvailableAction(action);
             }
@@ -74,9 +117,9 @@ namespace Ship
             if (AfterGenerateAvailableActionsList != null) AfterGenerateAvailableActionsList(this);
         }
 
-        public void GenerateAvailableFreeActionsList(List<ActionsList.GenericAction> freeActions)
+        public void GenerateAvailableFreeActionsList(List<GenericAction> freeActions)
         {
-            AvailableFreeActionsList = new List<ActionsList.GenericAction>();
+            AvailableFreeActionsList = new List<GenericAction>();
             foreach (var action in freeActions)
             {
                 AddAvailableFreeAction(action);
@@ -85,20 +128,34 @@ namespace Ship
             if (AfterGenerateAvailableActionsList != null) AfterGenerateAvailableActionsList(this);
         }
 
-        public bool CanPerformAction(ActionsList.GenericAction action)
+        public bool CanPerformAction(GenericAction action)
         {
             bool result = action.IsActionAvailable();
 
             if (OnTryAddAvailableAction != null) OnTryAddAvailableAction(action, ref result);
 
+            if (OnTryAddAvailableActionGlobal != null) OnTryAddAvailableActionGlobal(this, action, ref result);
+
             return result;
         }
 
-        public bool CanPerformActionsWhileStressed { get; protected set; }
+        public bool CanPerformFreeAction(GenericAction action)
+        {
+            bool result = action.IsActionAvailable() && action.CanBePerformedAsAFreeAction;
 
+            if (OnTryAddAvailableAction != null) OnTryAddAvailableAction(action, ref result);
 
+            if (OnTryAddAvailableActionGlobal != null) OnTryAddAvailableActionGlobal(this, action, ref result);
+
+            return result;
+        }
+
+        public void AskPerformFreeAction(GenericAction freeAction, Action callback, bool isForced = false)
+        {
+            AskPerformFreeAction(new List<GenericAction> { freeAction }, callback, isForced);
+        }
         // TODO: move actions list into subphase
-        public void AskPerformFreeAction(List<ActionsList.GenericAction> freeActions, Action callBack)
+        public void AskPerformFreeAction(List<GenericAction> freeActions, Action callback, bool isForced = false)
         {
             GenerateAvailableFreeActionsList(freeActions);
 
@@ -109,16 +166,19 @@ namespace Ship
                     TriggerOwner = Phases.CurrentPhasePlayer,
                     TriggerType = TriggerTypes.OnFreeAction,
                     EventHandler = delegate {
-                        Phases.StartTemporarySubPhase
+                        FreeActionDecisonSubPhase newSubPhase = (FreeActionDecisonSubPhase) Phases.StartTemporarySubPhaseNew
                         (
                             "Free action decision",
-                            typeof(SubPhases.FreeActionDecisonSubPhase),
-                            delegate
-                            {
-                                Phases.FinishSubPhase(typeof(SubPhases.FreeActionDecisonSubPhase));
-                                callBack();
+                            typeof(FreeActionDecisonSubPhase),
+                            delegate {
+                                var phase = Phases.CurrentSubPhase as FreeActionDecisonSubPhase;
+                                if (phase != null && phase.ActionWasPerformed) Actions.FinishAction(delegate { FinishFreeActionDecision(callback); });
+                                else FinishFreeActionDecision(callback);
                             }
                         );
+                        newSubPhase.ShowSkipButton = !isForced;
+                        newSubPhase.IsForced = isForced;
+                        newSubPhase.Start();
                     }
                 }
             );
@@ -126,22 +186,28 @@ namespace Ship
             Triggers.ResolveTriggers(TriggerTypes.OnFreeAction, Triggers.FinishTrigger);
         }
 
-        public List<ActionsList.GenericAction> GetAvailableActionsList()
+        private void FinishFreeActionDecision(Action callback)
+        {
+            Phases.FinishSubPhase(typeof(FreeActionDecisonSubPhase));
+            callback();
+        }
+
+        public List<GenericAction> GetAvailableActionsList()
         {
             return AvailableActionsList;
         }
 
-        public List<ActionsList.GenericAction> GetAvailablePrintedActionsList()
+        public List<GenericAction> GetAvailablePrintedActionsList()
         {
-            return BuiltInActions;
+            return PrintedActions;
         }
 
-        public List<ActionsList.GenericAction> GetAvailableFreeActionsList()
+        public List<GenericAction> GetAvailableFreeActionsList()
         {
             return AvailableFreeActionsList;
         }
 
-        public void AddAvailableAction(ActionsList.GenericAction action)
+        public void AddAvailableAction(GenericAction action)
         {
             if (CanPerformAction(action))
             {
@@ -149,27 +215,27 @@ namespace Ship
             }
         }
 
-        public void AddAvailableFreeAction(ActionsList.GenericAction action)
+        public void AddAvailableFreeAction(GenericAction action)
         {
-            if (CanPerformAction(action))
+            if (CanPerformFreeAction(action))
             {
                 AvailableFreeActionsList.Add(action);
             }
         }
 
-        public void AddAlreadyExecutedAction(ActionsList.GenericAction action)
+        public void AddAlreadyExecutedAction(GenericAction action)
         {
             AlreadyExecutedActions.Add(action);
         }
 
         public void ClearAlreadyExecutedActions()
         {
-            AlreadyExecutedActions = new List<ActionsList.GenericAction>();
+            AlreadyExecutedActions = new List<GenericAction>();
         }
 
         public void RemoveAlreadyExecutedAction(System.Type type)
         {
-            List<ActionsList.GenericAction> keys = new List<ActionsList.GenericAction>(AlreadyExecutedActions);
+            List<GenericAction> keys = new List<GenericAction>(AlreadyExecutedActions);
 
             foreach (var executedAction in keys)
             {
@@ -195,15 +261,22 @@ namespace Ship
             return result;
         }
 
+        public bool IsAlreadyExecutedAction<T>() where T : GenericAction
+        {
+            bool result = false;
+            result = AlreadyExecutedActions.Any(a => a is T);            
+            return result;
+        }
+
         // ACTION EFFECTS
 
         public void GenerateAvailableActionEffectsList()
         {
-            AvailableActionEffects = new List<ActionsList.GenericAction>(); ;
+            AvailableActionEffects = new List<GenericAction>(); ;
 
-            foreach (var token in AssignedTokens)
+            foreach (var token in Tokens.GetAllTokens())
             {
-                ActionsList.GenericAction action = token.GetAvailableEffects();
+                GenericAction action = token.GetAvailableEffects();
                 if (action != null) AddAvailableActionEffect(action);
             }
 
@@ -212,30 +285,36 @@ namespace Ship
             if (AfterGenerateAvailableActionEffectsListGlobal != null) AfterGenerateAvailableActionEffectsListGlobal();
         }
 
-        public void AddAvailableActionEffect(ActionsList.GenericAction action)
+        public void AddAvailableActionEffect(GenericAction action)
         {
-            if (CanUseActionEffect(action))
+            if (NotAlreadyAddedSameActionEffect(action) && CanUseActionEffect(action))
             {
                 AvailableActionEffects.Add(action);
             }
         }
 
-        public void AddAlreadyExecutedActionEffect(ActionsList.GenericAction action)
+        private bool NotAlreadyAddedSameActionEffect(GenericAction action)
         {
-            AlreadyExecutedActionEffects.Add(action);
+            // Return true if AvailableActionEffects doesn't contain action of the same type
+            return AvailableActionEffects.FirstOrDefault(n => n.GetType() == action.GetType()) == null;
         }
 
-        public void RemoveAlreadyExecutedActionEffect(ActionsList.GenericAction action)
+        public void AddAlreadyExecutedActionEffect(GenericAction action)
+        {
+            if (!action.CanBeUsedFewTimes) AlreadyExecutedActionEffects.Add(action);
+        }
+
+        public void RemoveAlreadyExecutedActionEffect(GenericAction action)
         {
             AlreadyExecutedActionEffects.RemoveAll(a => a.GetType() == action.GetType());
         }
 
         public void ClearAlreadyExecutedActionEffects()
         {
-            AlreadyExecutedActionEffects = new List<ActionsList.GenericAction>();
+            AlreadyExecutedActionEffects = new List<GenericAction>();
         }
 
-        public bool CanUseActionEffect(ActionsList.GenericAction action)
+        public bool CanUseActionEffect(GenericAction action)
         {
             bool result = true;
 
@@ -245,13 +324,15 @@ namespace Ship
 
             if (result)
             {
-                if (OnTryAddAvailableActionEffect != null) OnTryAddAvailableActionEffect(action, ref result);
+                if (OnTryAddAvailableActionEffect != null) OnTryAddAvailableActionEffect(this, action, ref result);
+
+                if (OnTryAddAvailableActionEffectGlobal != null) OnTryAddAvailableActionEffectGlobal(this, action, ref result);
             }
 
             return result;
         }
 
-        private bool IsActionEffectAlreadyExecuted(ActionsList.GenericAction action)
+        private bool IsActionEffectAlreadyExecuted(GenericAction action)
         {
             bool result = false;
 
@@ -267,23 +348,87 @@ namespace Ship
             return result;
         }
 
-        public List<ActionsList.GenericAction> GetAvailableActionEffectsList()
+        public List<GenericAction> GetAvailableActionEffectsList()
         {
             return AvailableActionEffects;
+        }
+
+        // COMPARE DICE RESULTS ACTION EFFECTS
+
+        public void GenerateAvailableCompareResultsEffectsList()
+        {
+            AvailableCompareResultsEffects = new List<GenericAction>();
+
+            if (AfterGenerateAvailableCompareResultsEffectsList != null) AfterGenerateAvailableCompareResultsEffectsList(this);
+        }
+
+        public void AddAvailableCompareResultsEffect(GenericAction action)
+        {
+            if (CanUseCompareResultsEffect(action))
+            {
+                AvailableCompareResultsEffects.Add(action);
+            }
+        }
+
+        public void AddAlreadyExecutedCompareResultsEffect(GenericAction action)
+        {
+            AlreadyExecutedCompareResultsEffects.Add(action);
+        }
+
+        public void RemoveAlreadyExecutedCompareResultsEffect(GenericAction action)
+        {
+            AlreadyExecutedCompareResultsEffects.RemoveAll(a => a.GetType() == action.GetType());
+        }
+
+        public bool CanUseCompareResultsEffect(GenericAction action)
+        {
+            bool result = true;
+
+            if (!action.IsActionEffectAvailable()) result = false;
+
+            if (IsCompareResultsEffectAlreadyExecuted(action)) result = false;
+
+            if (result)
+            {
+                if (OnTryAddAvailableCompareResultsEffect != null) OnTryAddAvailableCompareResultsEffect(action, ref result);
+            }
+
+            return result;
+        }
+
+        private bool IsCompareResultsEffectAlreadyExecuted(GenericAction action)
+        {
+            bool result = false;
+
+            foreach (var alreadyExecuedCompareResultsEffect in AlreadyExecutedCompareResultsEffects)
+            {
+                if (alreadyExecuedCompareResultsEffect.GetType() == action.GetType())
+                {
+                    result = true;
+                    break;
+                }
+            }
+
+            return result;
+        }
+
+        public List<GenericAction> GetAvailableCompareResultsEffectsList()
+        {
+            return AvailableCompareResultsEffects;
         }
 
         // OPPOSITE ACTION EFFECTS
 
         public void GenerateAvailableOppositeActionEffectsList()
         {
-            AvailableOppositeActionEffects = new List<ActionsList.GenericAction>();
+            AvailableOppositeActionEffects = new List<GenericAction>();
 
             if (AfterGenerateAvailableOppositeActionEffectsList != null) AfterGenerateAvailableOppositeActionEffectsList(this);
 
             if (AfterGenerateAvailableOppositeActionEffectsListGlobal != null) AfterGenerateAvailableOppositeActionEffectsListGlobal();
         }
 
-        public void AddAvailableOppositeActionEffect(ActionsList.GenericAction action)
+        public void AddAvailableOppositeActionEffect(GenericAction action)
         {
             if (CanUseOppositeActionEffect(action))
             {
@@ -291,22 +436,27 @@ namespace Ship
             }
         }
 
-        public void AddAlreadyExecutedOppositeActionEffect(ActionsList.GenericAction action)
+        public void AddAlreadyExecutedOppositeActionEffect(GenericAction action)
         {
             AlreadyExecutedOppositeActionEffects.Add(action);
         }
 
-        public void RemoveAlreadyExecutedOppositeActionEffect(ActionsList.GenericAction action)
+        public void RemoveAlreadyExecutedOppositeActionEffect(GenericAction action)
         {
             AlreadyExecutedOppositeActionEffects.RemoveAll(a => a.GetType() == action.GetType());
         }
 
         public void ClearAlreadyExecutedOppositeActionEffects()
         {
-            AlreadyExecutedOppositeActionEffects = new List<ActionsList.GenericAction>();
+            AlreadyExecutedOppositeActionEffects = new List<GenericAction>();
         }
 
-        public bool CanUseOppositeActionEffect(ActionsList.GenericAction action)
+        public void ClearAlreadyExecutedCompareResultsActionEffects()
+        {
+            AlreadyExecutedCompareResultsEffects = new List<GenericAction>();
+        }
+
+        public bool CanUseOppositeActionEffect(GenericAction action)
         {
             bool result = true;
 
@@ -316,13 +466,13 @@ namespace Ship
 
             if (result)
             {
-                if (OnTryAddAvailableOppositeActionEffect != null) OnTryAddAvailableOppositeActionEffect(action, ref result);
+                if (OnTryAddAvailableOppositeActionEffect != null) OnTryAddAvailableOppositeActionEffect(this, action, ref result);
             }
 
             return result;
         }
 
-        private bool IsOppositeActionEffectAlreadyExecuted(ActionsList.GenericAction action)
+        private bool IsOppositeActionEffectAlreadyExecuted(GenericAction action)
         {
             bool result = false;
 
@@ -338,156 +488,114 @@ namespace Ship
             return result;
         }
 
-        public List<ActionsList.GenericAction> GetAvailableOppositeActionEffectsList()
+        public List<GenericAction> GetAvailableOppositeActionEffectsList()
         {
             return AvailableOppositeActionEffects;
         }
 
         // TOKENS
 
-        public bool HasToken(System.Type type, char letter = ' ')
+        public void CallBeforeAssignToken(GenericToken token, Action callback)
         {
-            bool result = false;
-            if (GetToken(type, letter) != null) result = true;
-            return result;
+            if (BeforeTokenIsAssigned != null) BeforeTokenIsAssigned(this, token.GetType());
+            if (BeforeTokenIsAssignedGlobal != null) BeforeTokenIsAssignedGlobal(this, token.GetType());
+
+            Triggers.ResolveTriggers(TriggerTypes.OnBeforeTokenIsAssigned, callback);
         }
 
-        public Tokens.GenericToken GetToken(System.Type type, char letter = ' ')
+        public void CallOnTokenIsAssigned(GenericToken token, Action callback)
         {
-            Tokens.GenericToken result = null;
-
-            foreach (var assignedToken in AssignedTokens)
-            {
-                if (assignedToken.GetType() == type)
-                {
-                    if (assignedToken.GetType().BaseType == typeof(Tokens.GenericTargetLockToken))
-                    {
-                        if (((assignedToken as Tokens.GenericTargetLockToken).Letter == letter) || (letter == '*'))
-                        {
-                            return assignedToken;
-                        }
-                    }
-                    else
-                    {
-                        return assignedToken;
-                    }
-                }
-            }
-            return result;
-        }
-
-        public char GetTargetLockLetterPair(GenericShip targetShip)
-        {
-            char result = ' ';
-
-            Tokens.GenericToken blueToken = GetToken(typeof(Tokens.BlueTargetLockToken), '*');
-            if (blueToken != null)
-            {
-                char foundLetter = (blueToken as Tokens.BlueTargetLockToken).Letter;
-
-                Tokens.GenericToken redToken = targetShip.GetToken(typeof(Tokens.RedTargetLockToken), foundLetter);
-                if (redToken != null)
-                {
-                    return foundLetter;
-                }
-            }
-            return result;
-        }
-
-        public void AssignToken(Tokens.GenericToken token, Action callBack, char letter = ' ')
-        {
-            Tokens.GenericToken assignedToken = GetToken(token.GetType(), letter);
-
-            if (assignedToken != null)
-            {
-                assignedToken.Count++;
-            }
-            else                
-            {
-                AssignedTokens.Add(token);
-            }
-
             if (OnTokenIsAssigned != null) OnTokenIsAssigned(this, token.GetType());
 
             if (OnTokenIsAssignedGlobal != null) OnTokenIsAssignedGlobal(this, token.GetType());
 
-            Triggers.ResolveTriggers(TriggerTypes.OnTokenIsAssigned, callBack);
+            Tokens.TokenToAssign = null;
+
+            Triggers.ResolveTriggers(TriggerTypes.OnTokenIsAssigned, callback);
         }
 
-        public void RemoveToken(System.Type type, char letter = ' ', bool recursive = false)
+        public void CallOnConditionIsAssigned(System.Type tokenType)
         {
-            Tokens.GenericToken assignedToken = GetToken(type, letter);
-
-            if (assignedToken != null)
-            {
-
-                if (assignedToken.Count > 1)
-                {
-                    assignedToken.Count--;
-                    if (AfterTokenIsRemoved != null) AfterTokenIsRemoved(this, type);
-
-                    if (recursive)
-                    {
-                        RemoveToken(type, letter, true);
-                    }
-                }
-                else
-                {
-                    AssignedTokens.Remove(assignedToken);
-                    if (AfterTokenIsRemoved != null) AfterTokenIsRemoved(this, type);
-
-                    if (assignedToken.GetType().BaseType == typeof(Tokens.GenericTargetLockToken))
-                    {
-                        GenericShip otherTokenOwner = (assignedToken as Tokens.GenericTargetLockToken).OtherTokenOwner;
-                        Actions.ReleaseTargetLockLetter((assignedToken as Tokens.GenericTargetLockToken).Letter);
-                        System.Type oppositeType = (assignedToken.GetType() == typeof(Tokens.BlueTargetLockToken)) ? typeof(Tokens.RedTargetLockToken) : typeof(Tokens.BlueTargetLockToken);
-
-                        if (otherTokenOwner.HasToken(oppositeType, letter))
-                        {
-                            otherTokenOwner.RemoveToken(oppositeType, letter);
-                        }
-                    }
-                }
-            }
+            if (OnConditionIsAssigned != null) OnConditionIsAssigned(this, tokenType);
         }
 
-        public void SpendToken(System.Type type, Action callBack, char letter = ' ')
+        public void CallOnConditionIsRemoved(System.Type tokenType)
         {
-            RemoveToken(type, letter);
+            if (OnConditionIsRemoved != null) OnConditionIsRemoved(this, tokenType);
+        }
 
+        public void CallOnRemoveTokenEvent(System.Type tokenType)
+        {
+            if (OnTokenIsRemoved != null) OnTokenIsRemoved(this, tokenType);
+
+            if (OnTokenIsRemovedGlobal != null) OnTokenIsRemovedGlobal(this, tokenType);
+        }
+
+        public void CallOnTargetLockIsAcquiredEvent(GenericShip target, Action callback)
+        {
+            if (OnTargetLockIsAcquired != null) OnTargetLockIsAcquired(target);
+
+            Triggers.ResolveTriggers(TriggerTypes.OnTargetLockIsAcquired, callback);
+        }
+
+        public void ChooseTargetToAcquireTargetLock(Action callback, string abilityName, string imageUrl)
+        {
+            AcquireTargetLockSubPhase selectTargetLockSubPhase = (AcquireTargetLockSubPhase)Phases.StartTemporarySubPhaseNew(
+                "Select target for Target Lock",
+                typeof(AcquireTargetLockSubPhase),
+                delegate {
+                    UI.HideSkipButton();
+                    Phases.FinishSubPhase(typeof(AcquireTargetLockSubPhase));
+                    callback();
+                });
+
+            selectTargetLockSubPhase.RequiredPlayer = Owner.PlayerNo;
+            selectTargetLockSubPhase.AbilityName = abilityName;
+            selectTargetLockSubPhase.ImageUrl = imageUrl;
+            selectTargetLockSubPhase.Start();
+        }
+
+        public void CallFinishSpendToken(Type type, Action callback)
+        {
             if (OnTokenIsSpent != null) OnTokenIsSpent(this, type);
 
             if (OnTokenIsSpentGlobal != null) OnTokenIsSpentGlobal(this, type);
 
-            Triggers.ResolveTriggers(TriggerTypes.OnTokenIsSpent, callBack);
+            Triggers.ResolveTriggers(TriggerTypes.OnTokenIsSpent, callback);
         }
 
-        public List<Tokens.GenericToken> GetAssignedTokens()
-        {
-            return AssignedTokens;
-        }
-
-        public EventHandlerTokenBool BeforeRemovingTokenInEndPhase;
-
-        private bool ShoulRemoveTokenInEndPhase(Tokens.GenericToken token)
+        public bool ShouldRemoveTokenInEndPhase(GenericToken token)
         {
             var remove = token.Temporary;
             if (BeforeRemovingTokenInEndPhase != null) BeforeRemovingTokenInEndPhase(token, ref remove);
             return remove;
         }
 
+        // Coordinate
 
-        public void ClearAllTokens()
+        public void CallCoordinateTargetIsSelected(GenericShip targetShip, Action callback)
         {
-            List<Tokens.GenericToken> keys = new List<Tokens.GenericToken>(AssignedTokens);
+            if (OnCoordinateTargetIsSelected != null) OnCoordinateTargetIsSelected(targetShip);
 
-            foreach (var token in keys)
-            {
-                if (ShoulRemoveTokenInEndPhase(token))
-                {
-                    RemoveToken(token.GetType(), '*', true);
-                }
-            }
+            Triggers.ResolveTriggers(TriggerTypes.OnCoordinateTargetIsSelected, callback);
+        }
+
+        // Jam action
+
+        public void CallJamTargetIsSelected(GenericShip targetShip, Action callback)
+        {
+            if (OnJamTargetIsSelected != null) OnJamTargetIsSelected(targetShip);
+
+            Triggers.ResolveTriggers(TriggerTypes.OnJamTargetIsSelected, callback);
+        }
+
+        // Reroll is confirmed
+
+        public void CallRerollIsConfirmed(Action callback)
+        {
+            if (OnRerollIsConfirmed != null) OnRerollIsConfirmed(this);
+
+            Triggers.ResolveTriggers(TriggerTypes.OnRerollIsConfirmed, callback);
         }
 
     }

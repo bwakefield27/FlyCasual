@@ -133,12 +133,9 @@ namespace AI
             if (inDebug) Debug.Log("Random is: " + random);
             result = table[random];
 
-            //Temporary
-            GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
-
             if (inDebug) Debug.Log("Result is: " + result);
 
-            return Game.Movement.MovementFromString(result);
+            return ShipMovementScript.MovementFromString(result);
         }
 
         public static bool IsClosing(Ship.GenericShip thisShip, Ship.GenericShip anotherShip)
@@ -148,6 +145,61 @@ namespace AI
             float distanceToBack = Vector3.Distance(thisShip.GetPosition(), anotherShip.ShipBase.GetCentralBackPoint());
             result = (distanceToFront < distanceToBack) ? true : false;
             return result;
+        }
+
+        public void Check(Dictionary<string, Movement.MovementComplexity> maneuvers)
+        {
+
+            foreach (var maneuver in FrontManeuversInner)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
+            foreach (var maneuver in FrontManeuversOuter)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
+            foreach (var maneuver in FrontSideManeuversInner)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
+            foreach (var maneuver in FrontSideManeuversOuter)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
+            foreach (var maneuver in SideManeuversInner)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
+            foreach (var maneuver in SideManeuversOuter)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
+            foreach (var maneuver in BackSideManeuversInner)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
+            foreach (var maneuver in BackSideManeuversOuter)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
+            foreach (var maneuver in BackManeuversInner)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
+            foreach (var maneuver in BackManeuversOuter)
+            {
+                if (!maneuvers.ContainsKey(maneuver)) Debug.Log(this.ToString() + " has incorrect maneuver: " + maneuver);
+            }
+
         }
 
     }

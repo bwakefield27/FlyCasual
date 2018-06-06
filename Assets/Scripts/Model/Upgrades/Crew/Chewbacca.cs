@@ -1,6 +1,9 @@
 ﻿using Ship;
+using System;
 using UnityEngine;
 using Upgrade;
+using Abilities;
+using SubPhases;
 
 namespace UpgradesList
 {
@@ -8,22 +11,36 @@ namespace UpgradesList
     {
         public Chewbacca() : base()
         {
-            Type = UpgradeType.Crew;
+            Types.Add(UpgradeType.Crew);
             Name = "Chewbacca";
             Cost = 4;
 
             isUnique = true;
+
+            AvatarOffset = new Vector2(66, 1);
+
+            UpgradeAbilities.Add(new ChewbaccaCrewAbility());
         }
 
         public override bool IsAllowedForShip(GenericShip ship)
         {
-            return ship.faction == Faction.Rebels;
+            return ship.faction == Faction.Rebel;
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class ChewbaccaCrewAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.OnDamageCardIsDealt += RegisterChewbaccaCrewTrigger;
         }
 
-        public override void AttachToShip(GenericShip host)
+        public override void DeactivateAbility()
         {
-            base.AttachToShip(host);
-            Host.OnDamageCardIsDealt += RegisterChewbaccaCrewTrigger;
+            HostShip.OnDamageCardIsDealt -= RegisterChewbaccaCrewTrigger;
         }
 
         private void RegisterChewbaccaCrewTrigger(GenericShip ship)
@@ -38,67 +55,41 @@ namespace UpgradesList
             });
         }
 
-        public override void Discard()
-        {
-            Host.OnDamageCardIsDealt -= RegisterChewbaccaCrewTrigger;
-            base.Discard();
-        }
-
         private void AskUseChewbaccaCrewAbility(object sender, System.EventArgs e)
         {
             GenericShip previousShip = Selection.ActiveShip;
             Selection.ActiveShip = sender as GenericShip;
 
-            Phases.StartTemporarySubPhase(
-                "Ability of Chewbacca (crew)",
-                typeof(SubPhases.ChewbaccaCrewDecisionSubPhase),
-                delegate
-                {
+            AskToUseAbility(
+                AiForChewbaccaCrewAbility,
+                UseChewbaccaCrewAbility,
+                null,
+                delegate {
                     Selection.ActiveShip = previousShip;
                     Triggers.FinishTrigger();
                 }
             );
         }
-    }
-}
 
-namespace SubPhases
-{
-
-    public class ChewbaccaCrewDecisionSubPhase : DecisionSubPhase
-    {
-
-        public override void Prepare()
+        private bool AiForChewbaccaCrewAbility()
         {
-            infoText = "Use ability of Chewbacca (crew)?";
+            bool result = false;
 
-            AddDecision("Yes", UseChewbaccaCrewAbility);
-            AddDecision("No", DontUseChewbaccaCrewAbility);
+            if (HostShip.Hull == 1 || Combat.CurrentCriticalHitCard.AiAvoids) result = true;
 
-            defaultDecision = "Yes";
+            return result;
         }
 
         private void UseChewbaccaCrewAbility(object sender, System.EventArgs e)
         {
             Sounds.PlayShipSound("Chewbacca");
             Messages.ShowInfo("Chewbacca (crew) is used");
+
             Combat.CurrentCriticalHitCard = null;
             if (Selection.ActiveShip.TryRegenShields()) Messages.ShowInfo("Shield is restored");
-            Selection.ActiveShip.UpgradeBar.GetInstalledUpgrades().Find(n => n.GetType() == typeof(UpgradesList.Chewbacca)).Discard();
-            ConfirmDecision();
-        }
 
-        private void DontUseChewbaccaCrewAbility(object sender, System.EventArgs e)
-        {
-            ConfirmDecision();
-        }
-
-        private void ConfirmDecision()
-        {
-            Phases.FinishSubPhase(this.GetType());
-            CallBack();
+            HostUpgrade.TryDiscard(DecisionSubPhase.ConfirmDecision);
         }
 
     }
-
 }

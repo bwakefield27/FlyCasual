@@ -7,9 +7,11 @@ namespace UpgradesList
     {
         public Daredevil() : base()
         {
-            Type = UpgradeType.Elite;
+            Types.Add(UpgradeType.Elite);
             Name = "Daredevil";
             Cost = 3;
+
+            IsHidden = true;
         }
     }
 }

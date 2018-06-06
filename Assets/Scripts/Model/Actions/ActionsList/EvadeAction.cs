@@ -8,16 +8,17 @@ namespace ActionsList
     public class EvadeAction : GenericAction
     {
 
-        public EvadeAction() {
+        public EvadeAction()
+        {
             Name = EffectName = "Evade";
 
-            IsSpendEvade = true;
+            TokensSpend.Add(typeof(Tokens.EvadeToken));
         }
 
         public override void ActionEffect(System.Action callBack)
         {
-            Combat.CurentDiceRoll.ApplyEvade();
-            Selection.ActiveShip.SpendToken(typeof(Tokens.EvadeToken), callBack);
+            Combat.CurrentDiceRoll.ApplyEvade();
+            Selection.ActiveShip.Tokens.SpendToken(typeof(Tokens.EvadeToken), callBack);
         }
 
         public override bool IsActionEffectAvailable()
@@ -33,11 +34,11 @@ namespace ActionsList
 
             if (Combat.AttackStep == CombatStep.Defence)
             {
-                int attackSuccesses = Combat.DiceRollAttack.Successes;
+                int attackSuccessesCancelable = Combat.DiceRollAttack.SuccessesCancelable;
                 int defenceSuccesses = Combat.DiceRollDefence.Successes;
-                if (attackSuccesses > defenceSuccesses)
+                if (attackSuccessesCancelable > defenceSuccesses)
                 {
-                    result = (attackSuccesses - defenceSuccesses == 1) ? 70 : 20;
+                    result = (attackSuccessesCancelable - defenceSuccesses == 1) ? 70 : 20;
                 }
             }
 
@@ -46,7 +47,7 @@ namespace ActionsList
 
         public override void ActionTake()
         {
-            Selection.ThisShip.AssignToken(new Tokens.EvadeToken(), Phases.CurrentSubPhase.CallBack);
+            Selection.ThisShip.Tokens.AssignToken(new Tokens.EvadeToken(Selection.ThisShip), Phases.CurrentSubPhase.CallBack);
         }
 
         public override int GetActionPriority()

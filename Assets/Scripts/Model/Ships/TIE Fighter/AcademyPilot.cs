@@ -1,19 +1,23 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using RuleSets;
 
 namespace Ship
 {
     namespace TIEFighter
     {
-        public class AcademyPilot: TIEFighter
+        public class AcademyPilot: TIEFighter, ISecondEditionPilot
         {
             public AcademyPilot() : base()
             {
                 PilotName = "Academy Pilot";
-                ImageUrl = "https://vignette2.wikia.nocookie.net/xwing-miniatures/images/4/41/Academy-pilot.png";
                 PilotSkill = 1;
                 Cost = 12;
+            }
+
+            public void AdaptPilotToSecondEdition()
+            {
+                ImageUrl = "https://i.imgur.com/gzavoA8.png";
+
+                Cost = 24;
             }
         }
     }

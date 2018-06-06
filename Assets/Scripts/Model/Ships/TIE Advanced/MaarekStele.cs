@@ -3,66 +3,78 @@ using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Ship;
+using RuleSets;
 
 namespace Ship
 {
     namespace TIEAdvanced
     {
-        public class MaarekStele : TIEAdvanced
+        public class MaarekStele : TIEAdvanced, ISecondEditionPilot
         {
             public MaarekStele() : base()
             {
                 PilotName = "Maarek Stele";
-                ImageUrl = "https://vignette3.wikia.nocookie.net/xwing-miniatures/images/4/41/Maarek_Stele.png";
-                IsUnique = true;
                 PilotSkill = 7;
                 Cost = 27;
+
+                IsUnique = true;
+
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Elite);
+
+                PilotAbilities.Add(new Abilities.MaarekSteleAbility());
             }
 
-            public override void InitializePilot()
+            public void AdaptPilotToSecondEdition()
             {
-                base.InitializePilot();
-
-                OnFaceupCritCardReadyToBeDealtGlobal += MaarekStelePilotAbility;
-                OnDestroyed += RemoveMaarekSteleAbility;
+                PilotSkill = 5;
+                ImageUrl = "https://i.imgur.com/iZAYlu4.png";
+                Cost = 0; // TODO: Change
+                //TODO: Change ability ?
             }
+        }
+    }
+}
 
-            private void MaarekStelePilotAbility(GenericShip ship, CriticalHitCard.GenericCriticalHit crit, EventArgs e)
+namespace Abilities
+{
+    public class MaarekSteleAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            GenericShip.OnFaceupCritCardReadyToBeDealtGlobal += MaarekStelePilotAbility;
+        }
+
+        public override void DeactivateAbility()
+        {
+            GenericShip.OnFaceupCritCardReadyToBeDealtGlobal -= MaarekStelePilotAbility;
+        }
+
+        private void MaarekStelePilotAbility(GenericShip ship, GenericDamageCard crit, EventArgs e)
+        {
+            if ((e as DamageSourceEventArgs) == null) return;
+
+            GenericShip damageSourceShip = (e as DamageSourceEventArgs).Source as GenericShip;
+            if (damageSourceShip == null) return;
+
+            if (damageSourceShip.ShipId == HostShip.ShipId)
             {
-                if ((e as DamageSourceEventArgs) == null) return;
-                else if ((((e as DamageSourceEventArgs).Source) as GenericShip) == this)
+                if ((e as DamageSourceEventArgs).DamageType == DamageTypes.ShipAttack)
                 {
-                    if ((e as DamageSourceEventArgs).DamageType == DamageTypes.ShipAttack)
-                    {
-                        Triggers.RegisterTrigger(
-                            new Trigger() {
-                                Name = "Maarker Stele ability",
-                                TriggerType = TriggerTypes.OnFaceupCritCardReadyToBeDealt,
-                                TriggerOwner = ((e as DamageSourceEventArgs).Source as GenericShip).Owner.PlayerNo,
-                                EventHandler = ShowDecision
-                            }
-                        );
-                    }
+                    RegisterAbilityTrigger(TriggerTypes.OnFaceupCritCardReadyToBeDealt, ShowDecision);
                 }
             }
-
-            private static void ShowDecision(object sender, EventArgs e)
-            {
-                Phases.StartTemporarySubPhase(
-                    "Ability of Maarek Stele",
-                    typeof(SubPhases.CritToDealDecisionSubPhase),
-                    Triggers.FinishTrigger
-                );
-            }
-
-            private void RemoveMaarekSteleAbility(GenericShip ship)
-            {
-                OnFaceupCritCardReadyToBeDealtGlobal -= MaarekStelePilotAbility;
-                OnDestroyed -= RemoveMaarekSteleAbility;
-            }
-
         }
+
+        private static void ShowDecision(object sender, EventArgs e)
+        {
+            Phases.StartTemporarySubPhaseOld(
+                "Ability of Maarek Stele",
+                typeof(SubPhases.CritToDealDecisionSubPhase),
+                Triggers.FinishTrigger
+            );
+        }
+
     }
 }
 
@@ -71,16 +83,24 @@ namespace SubPhases
 
     public class CritToDealDecisionSubPhase : DecisionSubPhase
     {
-        private List<CriticalHitCard.GenericCriticalHit> criticalHitCardsToChoose = new List<CriticalHitCard.GenericCriticalHit>();
+        private List<GenericDamageCard> criticalHitCardsToChoose = new List<GenericDamageCard>();
 
-        public override void Prepare()
+        public override void PrepareDecision(Action callBack)
         {
-            infoText = "Select Critical Hit card to deal";
+            InfoText = "Select Critical Hit card to deal";
 
             criticalHitCardsToChoose.Add(Combat.CurrentCriticalHitCard);
             for (int i = 0; i < 2; i++)
             {
-                criticalHitCardsToChoose.Add(CriticalHitsDeck.GetCritCard());
+                DamageDecks.GetDamageDeck(Combat.Attacker.Owner.PlayerNo).DrawDamageCard(
+                    true,
+                    AddToCriticalHitCardsToChoose,
+                    new DamageSourceEventArgs()
+                    {
+                        Source = Combat.Attacker,
+                        DamageType = DamageTypes.ShipAttack
+                    }
+                );
             }
 
             foreach (var critCard in criticalHitCardsToChoose)
@@ -95,21 +115,22 @@ namespace SubPhases
                 );
             }
 
-            defaultDecision = Combat.CurrentCriticalHitCard.Name;
+            DefaultDecisionName = Combat.CurrentCriticalHitCard.Name;
+
+            DecisionViewType = DecisionViewTypes.ImageButtons;
+
+            callBack();
         }
 
-        private void DealCard(CriticalHitCard.GenericCriticalHit critCard)
+        private void AddToCriticalHitCardsToChoose(EventArgs e)
+        {
+            criticalHitCardsToChoose.Add(Combat.CurrentCriticalHitCard);
+        }
+
+        private void DealCard(GenericDamageCard critCard)
         {
             Combat.CurrentCriticalHitCard = critCard;
             ConfirmDecision();
-        }
-
-        private void ConfirmDecision()
-        {
-            Tooltips.EndTooltip();
-
-            Phases.FinishSubPhase(this.GetType());
-            CallBack();
         }
 
     }

@@ -1,5 +1,7 @@
 ﻿using Upgrade;
 using UnityEngine;
+using Abilities;
+using Ship;
 
 namespace UpgradesList
 {
@@ -7,23 +9,34 @@ namespace UpgradesList
     {
         public Elusiveness() : base()
         {
-            Type = UpgradeType.Elite;
+            Types.Add(UpgradeType.Elite);
             Name = "Elusiveness";
             Cost = 2;
-        }
 
-        public override void AttachToShip(Ship.GenericShip host)
+            UpgradeAbilities.Add(new ElusivenessAbility());
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class ElusivenessAbility : GenericAbility
+    {
+        public override void ActivateAbility()
         {
-            base.AttachToShip(host);
-
-            host.AfterGenerateAvailableOppositeActionEffectsList += ElusivenessActionEffect;
+            HostShip.AfterGenerateAvailableOppositeActionEffectsList += ElusivenessActionEffect;
         }
 
-        private void ElusivenessActionEffect(Ship.GenericShip host)
+        public override void DeactivateAbility()
+        {
+            HostShip.AfterGenerateAvailableOppositeActionEffectsList -= ElusivenessActionEffect;
+        }
+
+        private void ElusivenessActionEffect(GenericShip host)
         {
             ActionsList.GenericAction newAction = new ActionsList.ElusivenessActionEffect()
             {
-                ImageUrl = ImageUrl,
+                ImageUrl = HostUpgrade.ImageUrl,
                 Host = host
             };
             host.AddAvailableOppositeActionEffect(newAction);
@@ -39,7 +52,7 @@ namespace ActionsList
         public ElusivenessActionEffect()
         {
             Name = EffectName = "Elusiveness";
-            IsOpposite = true;
+            DiceModificationTiming = DiceModificationTimingType.Opposite;
         }
         
         public override int GetActionEffectPriority()
@@ -47,8 +60,8 @@ namespace ActionsList
             int result = 0;
 
             int potentialEvades = 0;
-            if (Host.HasToken(typeof(Tokens.EvadeToken))) potentialEvades++;
-            int potentialDiceEvadeResults = (Host.HasToken(typeof(Tokens.FocusToken))) ? 5 : 3;
+            if (Host.Tokens.HasToken(typeof(Tokens.EvadeToken))) potentialEvades++;
+            int potentialDiceEvadeResults = (Host.Tokens.HasToken(typeof(Tokens.FocusToken))) ? 5 : 3;
             float averageDefenceDiceResult = Host.Agility * (potentialDiceEvadeResults/8);
             potentialEvades += Mathf.RoundToInt(averageDefenceDiceResult);
             if (Host.Hull <= Host.Hull / 2) potentialEvades--;
@@ -65,7 +78,7 @@ namespace ActionsList
         {
             bool result = false;
 
-            if (Combat.AttackStep == CombatStep.Attack && !Host.HasToken(typeof(Tokens.StressToken)))
+            if (Combat.AttackStep == CombatStep.Attack && !Host.Tokens.HasToken(typeof(Tokens.StressToken)))
             {
                 result = true;
             }
@@ -88,7 +101,7 @@ namespace ActionsList
 
         private void AssignStress(System.Action callBack)
         {
-            Host.AssignToken(new Tokens.StressToken(), callBack);
+            Host.Tokens.AssignToken(new Tokens.StressToken(Host), callBack);
         }
 
     }

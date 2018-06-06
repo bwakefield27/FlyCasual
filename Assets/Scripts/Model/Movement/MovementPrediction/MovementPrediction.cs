@@ -14,7 +14,6 @@ namespace Movement
         public GenericMovement CurrentMovement;
         private GameObject[] generatedShipStands;
 
-        private bool isBumped;
         public bool IsBumped
         {
             get { return ShipsBumped.Count != 0; }
@@ -67,7 +66,7 @@ namespace Movement
             SuccessfullMovementProgress = 0;
             ObstaclesStayDetector lastShipBumpDetector = null;
 
-            for (int i = generatedShipStands.Length-1; i >= 0; i--)
+            for (int i = generatedShipStands.Length - 1; i >= 0; i--)
             {
                 ObstaclesStayDetector obstacleStayDetector = generatedShipStands[i].GetComponentInChildren<ObstaclesStayDetector>();
                 ObstaclesHitsDetector obstacleHitsDetector = generatedShipStands[i].GetComponentInChildren<ObstaclesHitsDetector>();
@@ -82,7 +81,7 @@ namespace Movement
                     {
                         IsOffTheBoard = obstacleStayDetector.OffTheBoard;
                         IsLandedOnAsteroid = obstacleStayDetector.OverlapsAsteroid;
-                        SuccessfullMovementProgress = (i + 1f) / generatedShipStands.Length;
+                        SuccessfullMovementProgress = (float)(i) / (generatedShipStands.Length - 1);
 
                         if (lastShipBumpDetector != null)
                         {
@@ -139,9 +138,16 @@ namespace Movement
 
             Selection.ThisShip.ToggleColliders(true);
 
-            DestroyGeneratedShipStands();
-
-            CallBack();
+            if (!DebugManager.DebugMovement)
+            {
+                DestroyGeneratedShipStands();
+                CallBack();
+            }
+            else
+            {
+                GameManagerScript Game = GameObject.Find("GameManager").GetComponent<GameManagerScript>();
+                Game.Wait(2, delegate { DestroyGeneratedShipStands(); CallBack(); });
+            }
         }
 
         private void DestroyGeneratedShipStands()

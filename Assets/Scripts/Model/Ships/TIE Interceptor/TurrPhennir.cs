@@ -1,6 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Ship;
+using System;
 
 namespace Ship
 {
@@ -11,7 +13,6 @@ namespace Ship
             public TurrPhennir() : base()
             {
                 PilotName = "Turr Phennir";
-                ImageUrl = "https://raw.githubusercontent.com/guidokessels/xwing-data/master/images/pilots/Galactic%20Empire/TIE%20Interceptor/turr-phennir.png";
                 PilotSkill = 7;
                 Cost = 25;
 
@@ -20,35 +21,41 @@ namespace Ship
                 PrintedUpgradeIcons.Add(Upgrade.UpgradeType.Elite);
 
                 SkinName = "Red Stripes";
-            }
 
-            public override void InitializePilot()
-            {
-                base.InitializePilot();
-                OnAttackPerformed += RegisterTurrPhennirPilotAbility;
+                PilotAbilities.Add(new Abilities.TurrPhennirAbility());
             }
+        }
+    }
+}
 
-            private void RegisterTurrPhennirPilotAbility()
-            {
-                Triggers.RegisterTrigger(new Trigger()
+namespace Abilities
+{
+    public class TurrPhennirAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.OnAttackFinish += RegisterTurrPhennirPilotAbility;
+        }
+
+        public override void DeactivateAbility()
+        {
+            HostShip.OnAttackFinish -= RegisterTurrPhennirPilotAbility;
+        }
+
+        private void RegisterTurrPhennirPilotAbility(GenericShip ship)
+        {
+            RegisterAbilityTrigger(TriggerTypes.OnAttackFinish, TurrPhennirPilotAbility);
+        }
+
+        private void TurrPhennirPilotAbility(object sender, System.EventArgs e)
+        {
+            HostShip.AskPerformFreeAction(
+                new List<ActionsList.GenericAction>()
                 {
-                    Name = "Turr Phennir's ability",
-                    TriggerType = TriggerTypes.OnAttackPerformed,
-                    TriggerOwner = this.Owner.PlayerNo,
-                    EventHandler = TurrPhennirPilotAbility
-                });
-            }
-
-            private void TurrPhennirPilotAbility(object sender, System.EventArgs e)
-            {
-                AskPerformFreeAction(
-                    new List<ActionsList.GenericAction>()
-                    {
-                        new ActionsList.BoostAction(),
-                        new ActionsList.BarrelRollAction()
-                    },
-                    Triggers.FinishTrigger);
-            }
+                    new ActionsList.BoostAction(),
+                    new ActionsList.BarrelRollAction()
+                },
+                Triggers.FinishTrigger);
         }
     }
 }

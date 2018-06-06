@@ -1,4 +1,8 @@
 ﻿using Upgrade;
+using System.Linq;
+using Abilities;
+using Ship;
+using ActionsList;
 
 namespace UpgradesList
 {
@@ -6,23 +10,34 @@ namespace UpgradesList
     {
         public Wired() : base()
         {
-            Type = UpgradeType.Elite;
+            Types.Add(UpgradeType.Elite);
             Name = "Wired";
             Cost = 1;
+
+            UpgradeAbilities.Add(new WiredAbility());
+        }
+    }
+}
+
+namespace Abilities
+{
+    public class WiredAbility : GenericAbility
+    {
+        public override void ActivateAbility()
+        {
+            HostShip.AfterGenerateAvailableActionEffectsList += WiredActionEffect;
         }
 
-        public override void AttachToShip(Ship.GenericShip host)
+        public override void DeactivateAbility()
         {
-            base.AttachToShip(host);
-
-            host.AfterGenerateAvailableActionEffectsList += WiredActionEffect;
+            HostShip.AfterGenerateAvailableActionEffectsList -= WiredActionEffect;
         }
 
-        private void WiredActionEffect(Ship.GenericShip host)
+        private void WiredActionEffect(GenericShip host)
         {
-            ActionsList.GenericAction newAction = new ActionsList.WiredActionEffect()
+            GenericAction newAction = new WiredActionEffect()
             {
-                ImageUrl = ImageUrl,
+                ImageUrl = HostUpgrade.ImageUrl,
                 Host = host
             };
             host.AddAvailableActionEffect(newAction);
@@ -43,15 +58,17 @@ namespace ActionsList
         public override int GetActionEffectPriority()
         {
             int result = 0;
-                        
-            if (Combat.AttackStep == CombatStep.Defence && Combat.DiceRollAttack.Successes > Combat.DiceRollDefence.Successes && Combat.DiceRollDefence.Focuses > 0)
+                
+            if (Combat.Attacker.Tokens.HasToken(typeof(Tokens.StressToken)))
             {
-                result = 30;
-            }
-
-            if (Combat.AttackStep == CombatStep.Attack && Combat.DiceRollAttack.Focuses > 0)
-            {
-                result = 30;                    
+                if (Combat.DiceRollAttack.Focuses > 0 && Combat.Attacker.GetAvailableActionEffectsList().Count(n => n.IsTurnsAllFocusIntoSuccess) == 0)
+                {
+                    result = 95;
+                }
+                else
+                {
+                    result = 30;
+                }
             }
             
             return result;            
@@ -59,7 +76,7 @@ namespace ActionsList
 
         public override bool IsActionEffectAvailable()
         {
-            return Host.HasToken(typeof(Tokens.StressToken));
+            return Host.Tokens.HasToken(typeof(Tokens.StressToken));
         }
         
         public override void ActionEffect(System.Action callBack)
@@ -67,7 +84,6 @@ namespace ActionsList
             DiceRerollManager diceRerollManager = new DiceRerollManager
             {
                 SidesCanBeRerolled = new System.Collections.Generic.List<DieSide> { DieSide.Focus },
-                NumberOfDiceCanBeRerolled = 1,
                 CallBack = callBack
             };
             diceRerollManager.Start();
